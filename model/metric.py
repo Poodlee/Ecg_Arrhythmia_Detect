@@ -1,5 +1,6 @@
 import torch
 
+# 평가 지표(Accuracy, Sensitivity, Precision, F1-score)
 
 def accuracy(output, target):
     with torch.no_grad():

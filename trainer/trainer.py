@@ -4,6 +4,7 @@ from torchvision.utils import make_grid
 from base import BaseTrainer
 from utils import inf_loop, MetricTracker
 
+# 기본적인 Trainer 클래스(train, valid 및 해당 과정 중 logging 포함)
 
 class Trainer(BaseTrainer):
     """
