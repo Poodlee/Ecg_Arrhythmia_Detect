@@ -1,6 +1,6 @@
 import torch
 
-def accuracy(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.5) -> float:
+def accuracy(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.7) -> float:
     """
     Computes the overall multi-label accuracy (exact match ratio).
 
@@ -17,7 +17,7 @@ def accuracy(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.5) 
     return correct.mean().item()
 
 
-def sensitivity(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.5) -> float:
+def sensitivity(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.7) -> float:
     """
     Computes macro-averaged sensitivity (recall) across all classes.
 
@@ -36,7 +36,7 @@ def sensitivity(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.
     return recall.mean().item()
 
 
-def precision(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.5) -> float:
+def precision(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.7) -> float:
     """
     Computes macro-averaged precision across all classes.
 
@@ -55,7 +55,7 @@ def precision(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.5)
     return prec.mean().item()
 
 
-def f1_score(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.5) -> float:
+def f1_score(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.7) -> float:
     """
     Computes macro-averaged F1-score across all classes.
 
@@ -74,7 +74,7 @@ def f1_score(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.5) 
     return 2 * (prec * rec) / (prec + rec)
 
 
-def macro_metrics(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.5) -> dict:
+def macro_metrics(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.7) -> dict:
     """
     Computes a dictionary of macro-averaged metrics.
 
@@ -111,7 +111,7 @@ class PerClassMetrics:
         self.fn = torch.zeros(self.num_classes)
         self.tn = torch.zeros(self.num_classes)
 
-    def update(self, preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.5):
+    def update(self, preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.7):
         preds = (preds > threshold).float()
         for i in range(self.num_classes):
             pred_i = preds[:, i]
