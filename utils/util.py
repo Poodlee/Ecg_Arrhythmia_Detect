@@ -57,9 +57,9 @@ class MetricTracker:
             raise ValueError(f"Metric {key} not initialized in MetricTracker")
         
         # Update internal data
-        self._data.total[key] += value * n
-        self._data.counts[key] += n
-        self._data.average[key] = self._data.total[key] / self._data.counts[key]
+        self._data.loc[key, 'total'] += value * n
+        self._data.loc[key, 'counts'] += n
+        self._data.loc[key, 'average'] = self._data.loc[key, 'total'] / self._data.loc[key, 'counts']
 
         # Log to writer
         if self.writer is not None:

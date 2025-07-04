@@ -18,7 +18,7 @@ class BaseDataLoader(DataLoader):
 
         self.sampler, self.valid_sampler = self._split_sampler(self.validation_split)
         self.init_kwargs = {
-            'dataset':  Subset(dataset, self.sampler.indices),
+            'dataset': dataset,
             'batch_size': batch_size,
             'shuffle': self.shuffle,
             'collate_fn': collate_fn,

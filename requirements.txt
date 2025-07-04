@@ -6,3 +6,4 @@ wfdb
 wandb
 grad-cam
 timm
+stockwell

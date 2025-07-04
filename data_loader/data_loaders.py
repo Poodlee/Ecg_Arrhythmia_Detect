@@ -28,7 +28,7 @@ from PIL import Image
 #         super().__init__(self.dataset, batch_size, shuffle, validation_split, num_workers)
 
 class Mit_bihDataLoader(BaseDataLoader):
-    def __init__(self, data_dir, batch_size=32, shuffle=True, validation_split=0.1, num_workers=2, fs=360):
+    def __init__(self, data_dir, batch_size=32, shuffle=True, validation_split=0.1, num_workers=8, fs=360):
         self.dataset = Mit_bihDataset(data_path=data_dir, fs=fs)
         super().__init__(self.dataset, batch_size, shuffle, validation_split, num_workers)
 

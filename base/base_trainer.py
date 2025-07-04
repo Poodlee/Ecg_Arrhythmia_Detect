@@ -40,7 +40,7 @@ class BaseTrainer:
         self.checkpoint_dir = config.save_dir
 
         # setup visualization writer instance                
-        # self.writer = WandbWriter(config.log_dir, self.logger, config)
+        self.writer = WandbWriter(config.log_dir, self.logger, config)
         
 
         if config.resume is not None:

@@ -187,111 +187,111 @@ def map_dict_to_str(config):
 
 
 # Function to initialize wandb run with config
-def run(config):
-    # Import wandb and login
-    import wandb
-    wandb.login()
-    wandb.init(project='ppp6131-yonsei-university', config=config)
-    wandb.run.name = map_dict_to_str(config)
+# def run(config):
+#     # Import wandb and login
+#     import wandb
+#     wandb.login()
+#     wandb.init(project='ppp6131-yonsei-university', config=config)
+#     wandb.run.name = map_dict_to_str(config)
 
-    print('------')
-    print(map_dict_to_str(config))
-    print('------\n')
+#     print('------')
+#     print(map_dict_to_str(config))
+#     print('------\n')
 
-    #config에 맞는 optimizer, model 정의
-    config = wandb.config
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+#     #config에 맞는 optimizer, model 정의
+#     config = wandb.config
+#     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    train_loader = make_loader(batch_size=config.batch_size, train=True)
-    test_loader = make_loader(batch_size=config.batch_size, train=False)
+#     train_loader = make_loader(batch_size=config.batch_size, train=True)
+#     test_loader = make_loader(batch_size=config.batch_size, train=False)
     
-    if config.model == 'CNN':
-        model = ConvNet().to(device)
-    if config.model == 'MLP':
-        model = MLPNet().to(device)
+#     if config.model == 'CNN':
+#         model = ConvNet().to(device)
+#     if config.model == 'MLP':
+#         model = MLPNet().to(device)
 
-    criterion = nn.CrossEntropyLoss()
+#     criterion = nn.CrossEntropyLoss()
 
-    if config.optimizer == 'sgd':
-        optimizer = torch.optim.SGD(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
-    if config.optimizer == 'adam':
-        optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
-    if config.optimizer == 'adamw':
-        optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
+#     if config.optimizer == 'sgd':
+#         optimizer = torch.optim.SGD(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
+#     if config.optimizer == 'adam':
+#         optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
+#     if config.optimizer == 'adamw':
+#         optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
 
-    #선택된 model이 wandb.watch()에 전잘됨, gradient 정보 확인 가능
-    wandb.watch(model, criterion, log="all")
+#     #선택된 model이 wandb.watch()에 전잘됨, gradient 정보 확인 가능
+#     wandb.watch(model, criterion, log="all")
 
-    #모델 학습 진행
-    max_loss = np.inf
+#     #모델 학습 진행
+#     max_loss = np.inf
 
-    #wandb.log()로 우리의 metric 기록 가능.
-    #wandb.log()에 dictionary로 한번에 전달가능 / 여기서는 따로따로 logging 진행
-    #step = epoch+1 전달시, 그래프으 x축이 epoch와 동일해짐. (1~config.epochs)
-    for epoch in range(config.epochs):
-        train_loss, train_acc = model_train(model, train_loader, criterion, optimizer, device, None)
-        val_loss, val_acc, sample_batch, sample_label, sample_prediction = model_evaluate(model, test_loader, criterion, device)
+#     #wandb.log()로 우리의 metric 기록 가능.
+#     #wandb.log()에 dictionary로 한번에 전달가능 / 여기서는 따로따로 logging 진행
+#     #step = epoch+1 전달시, 그래프으 x축이 epoch와 동일해짐. (1~config.epochs)
+#     for epoch in range(config.epochs):
+#         train_loss, train_acc = model_train(model, train_loader, criterion, optimizer, device, None)
+#         val_loss, val_acc, sample_batch, sample_label, sample_prediction = model_evaluate(model, test_loader, criterion, device)
 
-        #커스텀 메트릭 계산 (sigmoid 후 multi-label metric으로 가정)
-        with torch.no_grad():
-            sigmoid = torch.nn.Sigmoid()
-            preds_tensor = sigmoid(sample_prediction)
-            labels_tensor = sample_label.float()
+#         #커스텀 메트릭 계산 (sigmoid 후 multi-label metric으로 가정)
+#         with torch.no_grad():
+#             sigmoid = torch.nn.Sigmoid()
+#             preds_tensor = sigmoid(sample_prediction)
+#             labels_tensor = sample_label.float()
 
-            metrics = macro_metrics(preds_tensor, labels_tensor, threshold=0.7)
+#             metrics = macro_metrics(preds_tensor, labels_tensor, threshold=0.7)
 
-        wandb.log({
-            "Train Loss": train_loss,
-            "Train Accuracy": train_acc,
-            "Validation Loss": val_loss,
-            "Validation Accuracy": val_acc,
-            "Val Macro Accuracy": metrics["accuracy"],
-            "Val Macro Sensitivity": metrics["sensitivity"],
-            "Val Macro Precision": metrics["precision"],
-            "Val Macro F1": metrics["f1_score"],
-            "examples": [wandb.Image(image, caption=f"Pred: {pred}, Label: {label}")
-                         for image, pred, label in zip(sample_batch, sample_prediction, sample_label)]
-        }, step=epoch + 1)
+#         wandb.log({
+#             "Train Loss": train_loss,
+#             "Train Accuracy": train_acc,
+#             "Validation Loss": val_loss,
+#             "Validation Accuracy": val_acc,
+#             "Val Macro Accuracy": metrics["accuracy"],
+#             "Val Macro Sensitivity": metrics["sensitivity"],
+#             "Val Macro Precision": metrics["precision"],
+#             "Val Macro F1": metrics["f1_score"],
+#             "examples": [wandb.Image(image, caption=f"Pred: {pred}, Label: {label}")
+#                          for image, pred, label in zip(sample_batch, sample_prediction, sample_label)]
+#         }, step=epoch + 1)
 
-        # 모델 저장
-        if val_loss < max_loss:
-            max_loss = val_loss
-            torch.save(model.state_dict(), 'Best_Model.pth')
+#         # 모델 저장
+#         if val_loss < max_loss:
+#             max_loss = val_loss
+#             torch.save(model.state_dict(), 'Best_Model.pth')
 
-    #최종 평가: Per-class metric 계산 (각 epoch 별로 best model 고른 후, class별 성능 계산)
-    model.load_state_dict(torch.load('Best_Model.pth', map_location=device))
-    model.eval()
+#     #최종 평가: Per-class metric 계산 (각 epoch 별로 best model 고른 후, class별 성능 계산)
+#     model.load_state_dict(torch.load('Best_Model.pth', map_location=device))
+#     model.eval()
 
-    perclass = PerClassMetrics(num_classes=sample_label.shape[1])
-    for images, labels in test_loader:
-        with torch.no_grad():
-            images = images.to(device)
-            labels = labels.to(device).float()
-            preds = sigmoid(model(images))
-            perclass.update(preds, labels, threshold=0.7)
+#     perclass = PerClassMetrics(num_classes=sample_label.shape[1])
+#     for images, labels in test_loader:
+#         with torch.no_grad():
+#             images = images.to(device)
+#             labels = labels.to(device).float()
+#             preds = sigmoid(model(images))
+#             perclass.update(preds, labels, threshold=0.7)
 
-    final_metrics = perclass.compute_metrics()
+#     final_metrics = perclass.compute_metrics()
 
-    #Per-class metric wandb에 기록
-    for i in range(config.get("num_classes", sample_label.shape[1])):
-        wandb.log({
-            f"Class_{i}/Precision": final_metrics["precision"][i],
-            f"Class_{i}/Sensitivity": final_metrics["sensitivity"][i],
-            f"Class_{i}/F1": final_metrics["f1_score"][i],
-            f"Class_{i}/Accuracy": final_metrics["accuracy"][i],
-        })
+#     #Per-class metric wandb에 기록
+#     for i in range(config.get("num_classes", sample_label.shape[1])):
+#         wandb.log({
+#             f"Class_{i}/Precision": final_metrics["precision"][i],
+#             f"Class_{i}/Sensitivity": final_metrics["sensitivity"][i],
+#             f"Class_{i}/F1": final_metrics["f1_score"][i],
+#             f"Class_{i}/Accuracy": final_metrics["accuracy"][i],
+#         })
 
-    # Macro 평균 기록
-    wandb.log({
-        "Best Test Loss": val_loss,
-        "Best Test Accuracy": val_acc,
-        "Best Macro Precision": sum(final_metrics["precision"]) / len(final_metrics["precision"]),
-        "Best Macro Sensitivity": sum(final_metrics["sensitivity"]) / len(final_metrics["sensitivity"]),
-        "Best Macro F1": sum(final_metrics["f1_score"]) / len(final_metrics["f1_score"]),
-        "Best Macro Accuracy": sum(final_metrics["accuracy"]) / len(final_metrics["accuracy"]),
-    })
+#     # Macro 평균 기록
+#     wandb.log({
+#         "Best Test Loss": val_loss,
+#         "Best Test Accuracy": val_acc,
+#         "Best Macro Precision": sum(final_metrics["precision"]) / len(final_metrics["precision"]),
+#         "Best Macro Sensitivity": sum(final_metrics["sensitivity"]) / len(final_metrics["sensitivity"]),
+#         "Best Macro F1": sum(final_metrics["f1_score"]) / len(final_metrics["f1_score"]),
+#         "Best Macro Accuracy": sum(final_metrics["accuracy"]) / len(final_metrics["accuracy"]),
+#     })
 
-    return 'Done'
+#     return 'Done'
 
 #hyperparameter 조합 모두 실험 가능. 아래는 example.
 # model_list = ['CNN', 'MLP']
@@ -334,8 +334,6 @@ class WandbWriter:
         self.logger = logger
         self.config = config
 
-        import os
-        os.environ['PYTHONUTF8'] = '1'
         # Initialize wandb
         wandb.login()
         wandb.init(project=project_name, config=config)
@@ -345,13 +343,29 @@ class WandbWriter:
     def _map_dict_to_str(self, config):
         """Convert config dict to a string for run name."""
         parts = []
-        for key, value in config.items():
+        for key, value in config.config.items():
             if isinstance(value, dict):
                 for subkey, subvalue in value.items():
                     parts.append(f"{key}_{subkey}={subvalue}")
             else:
                 parts.append(f"{key}={value}")
         return "_".join(parts)
+
+    def set_step(self, step):
+        """
+        Sets the default global step for subsequent W&B logging calls.
+
+        This function allows you to set a default 'step' value that will be
+        used by `add_scalar`, `add_image`, and `log` methods if their
+        'step' argument is not explicitly provided. This is useful for
+        managing the global training step (e.g., batch or epoch number).
+
+        Args:
+            step (int): The current global step value (e.g., iteration, epoch).
+        """
+        self._current_step = step
+        self.logger.debug(f"W&B global step set to: {self._current_step}")
+
 
     def add_scalar(self, key, value, step=None):
         """Log a scalar metric to W&B."""
@@ -384,3 +398,5 @@ class WandbWriter:
         """Finish W&B run."""
         wandb.finish()
         self.logger.info("W&B run finished")
+        
+        
