@@ -334,6 +334,8 @@ class WandbWriter:
         self.logger = logger
         self.config = config
 
+        self._scope_steps = {}
+
         # Initialize wandb
         wandb.login()
         wandb.init(project=project_name, config=config)
@@ -351,9 +353,10 @@ class WandbWriter:
                 parts.append(f"{key}={value}")
         return "_".join(parts)
 
-    def set_step(self, step):
+    def set_step(self, step, scope=None):
         """
-        Sets the default global step for subsequent W&B logging calls.
+        Sets the default global step for subsequent W&B logging calls or
+        sets step for a specific scope (e.g., 'train', 'valid').
 
         This function allows you to set a default 'step' value that will be
         used by `add_scalar`, `add_image`, and `log` methods if their
@@ -362,10 +365,18 @@ class WandbWriter:
 
         Args:
             step (int): The current global step value (e.g., iteration, epoch).
+            scope (str, optional): If provided, sets the step for a specific scope
+                                   (e.g., 'train' or 'valid'). Otherwise, sets the
+                                   global step.
         """
-        self._current_step = step
-        self.logger.debug(f"W&B global step set to: {self._current_step}")
-
+        if scope is None:
+            # Set global step
+            self._current_step = step
+            self.logger.debug(f"W&B global step set to: {self._current_step}")
+        else:
+            # Set step for specific scope
+            self._scope_steps[scope] = step
+            self.logger.debug(f"W&B step for scope '{scope}' set to: {step}")
 
     def add_scalar(self, key, value, step=None):
         """Log a scalar metric to W&B."""
