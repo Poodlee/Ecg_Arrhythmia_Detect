@@ -5,8 +5,6 @@ from pathlib import Path
 from itertools import repeat
 from collections import OrderedDict
 
-# 각종 잡다한 것들
-
 def ensure_dir(dirname):
     dirname = Path(dirname)
     if not dirname.is_dir():
@@ -14,7 +12,7 @@ def ensure_dir(dirname):
 
 def read_json(fname):
     fname = Path(fname)
-    with fname.open('rt') as handle:
+    with fname.open('rt', encoding='utf-8') as handle:
         return json.load(handle, object_hook=OrderedDict)
 
 def write_json(content, fname):
@@ -54,13 +52,31 @@ class MetricTracker:
         for col in self._data.columns:
             self._data[col].values[:] = 0
 
-    def update(self, key, value, n=1):
-        if self.writer is not None:
-            self.writer.add_scalar(key, value)
+    def update(self, key, value, n=1, step=None):
+        if key not in self._data.index:
+            raise ValueError(f"Metric {key} not initialized in MetricTracker")
+        
+        # Update internal data
         self._data.total[key] += value * n
         self._data.counts[key] += n
         self._data.average[key] = self._data.total[key] / self._data.counts[key]
 
+        # Log to writer
+        if self.writer is not None:
+            self.writer.add_scalar(key, value, step=step)
+            
+    def update_batch(self, metrics, step=None):
+        for key, value in metrics.items():
+            if key in self._data.index:
+                self.update(key, value, n=1, step=step)
+            else:
+                print(f"Warning: Metric {key} not initialized, skipping.")
+        
+        if self.writer is not None:
+            valid_metrics = {k: v for k, v in metrics.items() if k in self._data.index}
+            if valid_metrics:
+                self.writer.log(valid_metrics, step=step)        
+        
     def avg(self, key):
         return self._data.average[key]
 

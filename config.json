@@ -1,16 +1,16 @@
 {
-    "name": "Mnist_LeNet",
+    "name": "Test Setting",
     "n_gpu": 1,
 
     "arch": {
-        "type": "MnistModel",
+        "type": "ConvNeXtV2",
         "args": {}
     },
     "data_loader": {
-        "type": "MnistDataLoader",
+        "type": "Mit_bihDataLoader",
         "args":{
-            "data_dir": "data/",
-            "batch_size": 128,
+            "data_dir": "data/processed/mit_bih",
+            "batch_size": 4,
             "shuffle": true,
             "validation_split": 0.1,
             "num_workers": 2
@@ -24,9 +24,15 @@
             "amsgrad": true
         }
     },
-    "loss": "nll_loss",
+    "loss": {
+        "type": "bce",
+        "alpha": 0.25,
+        "gamma": 2.0
+    },
+    "log_dir": "logs/",
     "metrics": [
-        "accuracy", "top_k_acc"
+        "accuracy", "sensitivity",
+        "precision", "f1_score"
     ],
     "lr_scheduler": {
         "type": "StepLR",
@@ -43,8 +49,6 @@
         "verbosity": 2,
         
         "monitor": "min val_loss",
-        "early_stop": 10,
-
-        "tensorboard": true
+        "early_stop": 10
     }
 }

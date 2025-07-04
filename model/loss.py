@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class LossSelector:
-    def __init__(self, loss_type='bce', alpha=0.25, gamma=2.0, pos_weight=None, class_weights=None):
+    def __init__(self, loss_type, alpha, gamma, pos_weight, class_weights):
         """
         loss_type: 'bce', 'focal', 'asymmetric'
         alpha, gamma: focal loss parameter
@@ -91,3 +91,11 @@ class LossSelector:
             loss *= self.class_weights
 
         return -loss.mean()
+    
+def bce(self, inputs, targets):
+    """
+    Binary Cross Entropy loss with logits.
+    inputs: logits (before sigmoid), shape (B, C)
+    targets: binary labels, shape (B, C)
+    """
+    return nn.BCEWithLogitsLoss(pos_weight=self.pos_weight)(inputs, targets)

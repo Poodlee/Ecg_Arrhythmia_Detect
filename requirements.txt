@@ -2,3 +2,7 @@ torch>=1.1
 torchvision
 numpy
 tqdm
+wfdb
+wandb
+grad-cam
+timm

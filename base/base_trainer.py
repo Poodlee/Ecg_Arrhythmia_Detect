@@ -1,7 +1,7 @@
 import torch
 from abc import abstractmethod
 from numpy import inf
-from logger import TensorboardWriter
+from logger import WandbWriter
 
 
 class BaseTrainer:
@@ -40,7 +40,8 @@ class BaseTrainer:
         self.checkpoint_dir = config.save_dir
 
         # setup visualization writer instance                
-        self.writer = TensorboardWriter(config.log_dir, self.logger, cfg_trainer['tensorboard'])
+        # self.writer = WandbWriter(config.log_dir, self.logger, config)
+        
 
         if config.resume is not None:
             self._resume_checkpoint(config.resume)
@@ -59,44 +60,57 @@ class BaseTrainer:
         Full training logic
         """
         not_improved_count = 0
+        print(f"▶️ Starting training from epoch {self.start_epoch} to {self.epochs}")
+        
         for epoch in range(self.start_epoch, self.epochs + 1):
+            print(f"\n📘 Epoch {epoch} starting...")
+
             result = self._train_epoch(epoch)
+            print(f"✅ Epoch {epoch} training complete. Result: {result}")
 
             # save logged informations into log dict
             log = {'epoch': epoch}
             log.update(result)
 
             # print logged informations to the screen
+            print("📊 Logging results:")
             for key, value in log.items():
+                print(f'    {key:15s}: {value}')
                 self.logger.info('    {:15s}: {}'.format(str(key), value))
 
             # evaluate model performance according to configured metric, save best checkpoint as model_best
             best = False
             if self.mnt_mode != 'off':
+                print(f"🔍 Monitoring metric: {self.mnt_metric} (mode: {self.mnt_mode})")
                 try:
-                    # check whether model performance improved or not, according to specified metric(mnt_metric)
                     improved = (self.mnt_mode == 'min' and log[self.mnt_metric] <= self.mnt_best) or \
-                               (self.mnt_mode == 'max' and log[self.mnt_metric] >= self.mnt_best)
+                            (self.mnt_mode == 'max' and log[self.mnt_metric] >= self.mnt_best)
                 except KeyError:
-                    self.logger.warning("Warning: Metric '{}' is not found. "
-                                        "Model performance monitoring is disabled.".format(self.mnt_metric))
+                    self.logger.warning(f"⚠️  Warning: Metric '{self.mnt_metric}' is not found. "
+                                        f"Model performance monitoring is disabled.")
                     self.mnt_mode = 'off'
                     improved = False
 
                 if improved:
+                    print(f"💡 Improvement detected: {self.mnt_metric} improved from {self.mnt_best} to {log[self.mnt_metric]}")
                     self.mnt_best = log[self.mnt_metric]
                     not_improved_count = 0
                     best = True
                 else:
                     not_improved_count += 1
+                    print(f"⏸️ No improvement. Count: {not_improved_count}")
 
                 if not_improved_count > self.early_stop:
-                    self.logger.info("Validation performance didn\'t improve for {} epochs. "
-                                     "Training stops.".format(self.early_stop))
+                    msg = f"🛑 Validation performance didn't improve for {self.early_stop} epochs. Stopping training."
+                    print(msg)
+                    self.logger.info(msg)
                     break
 
             if epoch % self.save_period == 0:
+                print(f"💾 Saving checkpoint for epoch {epoch} (best: {best})...")
                 self._save_checkpoint(epoch, save_best=best)
+
+        print("🏁 Training complete.")
 
     def _save_checkpoint(self, epoch, save_best=False):
         """

@@ -16,184 +16,182 @@ import torchvision.transforms as tr
 import torchvision.models as models
 
 from IPython.display import clear_output
-from metric import macro_metrics, PerClassMetrics  # metric 함수들 임포트 필요
+from model.metric import macro_metrics, PerClassMetrics  # metric 함수들 임포트 필요
 
 
-def seed_everything(seed = 21):
-    random.seed(seed)
-    np.random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = True
-
-seed_everything()
-
-# Import wandb and login
-import wandb
-wandb.login()
+# def seed_everything(seed = 21):
+#     random.seed(seed)
+#     np.random.seed(seed)
+#     os.environ["PYTHONHASHSEED"] = str(seed)
+#     torch.manual_seed(seed)
+#     torch.cuda.manual_seed(seed)
+#     torch.backends.cudnn.deterministic = True
+#     torch.backends.cudnn.benchmark = True
 
 #data loader
-def make_loader(batch_size, train = True, shuffle = True):
-    full_dataset = torchvision.datasets.MNIST(root='./data/MNIST',
-                                              train=train,
-                                              download=True,
-                                              transform=tr.ToTensor())
-    loader = DataLoader(dataset = full_dataset, batch_size = batch_size, shuffle = shuffle, pin_memory = True)
-    return loader
+# def make_loader(batch_size, train = True, shuffle = True):
+#     full_dataset = torchvision.datasets.MNIST(root='./data/MNIST',
+#                                               train=train,
+#                                               download=True,
+#                                               transform=tr.ToTensor())
+#     loader = DataLoader(dataset = full_dataset, batch_size = batch_size, shuffle = shuffle, pin_memory = True)
+#     return loader
 
-# Total params: 30,762
-class ConvNet(nn.Module):
-    def __init__(self):
-        super(ConvNet, self).__init__()
-        self.conv1 = nn.Conv2d(1,16,3)
-        self.conv2 = nn.Conv2d(16,32,3)
-        self.fc1 = nn.Linear(32*5*5, 32)
-        self.fc2 = nn.Linear(32,10)
-    def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = F.max_pool2d(x,2)
-        x = F.relu(self.conv2(x))
-        x = F.max_pool2d(x,2)
-        x = x.view(-1, 32*5*5)
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
+# # Total params: 30,762
+# class ConvNet(nn.Module):
+#     def __init__(self):
+#         super(ConvNet, self).__init__()
+#         self.conv1 = nn.Conv2d(1,16,3)
+#         self.conv2 = nn.Conv2d(16,32,3)
+#         self.fc1 = nn.Linear(32*5*5, 32)
+#         self.fc2 = nn.Linear(32,10)
+#     def forward(self, x):
+#         x = F.relu(self.conv1(x))
+#         x = F.max_pool2d(x,2)
+#         x = F.relu(self.conv2(x))
+#         x = F.max_pool2d(x,2)
+#         x = x.view(-1, 32*5*5)
+#         x = F.relu(self.fc1(x))
+#         x = self.fc2(x)
+#         return x
     
-# Total params: 53,018
-class MLPNet(nn.Module):
-    def __init__(self):
-        super(MLPNet, self).__init__()
-        self.fc1 = nn.Linear(784, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, 16)
-        self.fc4 = nn.Linear(16, 10)
+# # Total params: 53,018
+# class MLPNet(nn.Module):
+#     def __init__(self):
+#         super(MLPNet, self).__init__()
+#         self.fc1 = nn.Linear(784, 64)
+#         self.fc2 = nn.Linear(64, 32)
+#         self.fc3 = nn.Linear(32, 16)
+#         self.fc4 = nn.Linear(16, 10)
 
-    def forward(self, x):
-        x = x.float()
-        x = F.relu(self.fc1(x.view(-1, 784)))
-        x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = F.relu(self.fc4(x))
-        return x
+#     def forward(self, x):
+#         x = x.float()
+#         x = F.relu(self.fc1(x.view(-1, 784)))
+#         x = F.relu(self.fc2(x))
+#         x = F.relu(self.fc3(x))
+#         x = F.relu(self.fc4(x))
+#         return x
 
 #test training model, new model_train and model_evaluate should replace these funcs.  
-def model_train(model, 
-                data_loader, 
-                criterion, 
-                optimizer, 
-                device, 
-                scheduler=None, 
-                tqdm_disable=False):
-    """
-    Model train (for multi-class classification)
+# def model_train(model, 
+#                 data_loader, 
+#                 criterion, 
+#                 optimizer, 
+#                 device, 
+#                 scheduler=None, 
+#                 tqdm_disable=False):
+#     """
+#     Model train (for multi-class classification)
 
-    Args:
-        model (torch model)
-        data_loader (torch dataLoader)
-        criterion (torch loss)
-        optimizer (torch optimizer)
-        device (str): 'cpu' / 'cuda' / 'mps'
-        scheduler (torch scheduler, optional): lr scheduler. Defaults to None.
-        tqdm_disable (bool, optional): if True, tqdm progress bars will be removed. Defaults to False.
+#     Args:
+#         model (torch model)
+#         data_loader (torch dataLoader)
+#         criterion (torch loss)
+#         optimizer (torch optimizer)
+#         device (str): 'cpu' / 'cuda' / 'mps'
+#         scheduler (torch scheduler, optional): lr scheduler. Defaults to None.
+#         tqdm_disable (bool, optional): if True, tqdm progress bars will be removed. Defaults to False.
 
-    Returns:
-        loss, accuracy: Avg loss, acc for 1 epoch
-    """
-    model.train()
+#     Returns:
+#         loss, accuracy: Avg loss, acc for 1 epoch
+#     """
+#     model.train()
 
-    running_loss = 0
-    correct = 0
+#     running_loss = 0
+#     correct = 0
 
-    for X, y in tqdm(data_loader, disable=tqdm_disable):
-        X, y = X.to(device), y.to(device)
+#     for X, y in tqdm(data_loader, disable=tqdm_disable):
+#         X, y = X.to(device), y.to(device)
 
-        optimizer.zero_grad()
+#         optimizer.zero_grad()
 
-        output = model(X)
-        loss = criterion(output, y)
-        loss.backward()
-        optimizer.step()
+#         output = model(X)
+#         loss = criterion(output, y)
+#         loss.backward()
+#         optimizer.step()
 
-        # multi-class classification
-        _, pred = output.max(dim=1)
-        correct += pred.eq(y).sum().item()
-        running_loss += loss.item() * X.size(0)
+#         # multi-class classification
+#         _, pred = output.max(dim=1)
+#         correct += pred.eq(y).sum().item()
+#         running_loss += loss.item() * X.size(0)
 
-    if scheduler:
-        scheduler.step()
+#     if scheduler:
+#         scheduler.step()
 
-    accuracy = correct / len(data_loader.dataset) # Avg acc
-    loss = running_loss / len(data_loader.dataset) # Avg loss
+#     accuracy = correct / len(data_loader.dataset) # Avg acc
+#     loss = running_loss / len(data_loader.dataset) # Avg loss
 
-    return loss, accuracy
+#     return loss, accuracy
 
 
-def model_evaluate(model, 
-                   data_loader, 
-                   criterion, 
-                   device):
-    """
-    Model validate (for multi-class classification)
+# def model_evaluate(model, 
+#                    data_loader, 
+#                    criterion, 
+#                    device):
+#     """
+#     Model validate (for multi-class classification)
 
-    Args:
-        model (torch model)
-        data_loader (torch dataLoader)
-        criterion (torch loss)
-        device (str): 'cpu' / 'cuda' / 'mps'
+#     Args:
+#         model (torch model)
+#         data_loader (torch dataLoader)
+#         criterion (torch loss)
+#         device (str): 'cpu' / 'cuda' / 'mps'
 
-    Returns:
-        loss, accuracy: Avg loss, acc for 1 epoch
-    """
-    model.eval()
+#     Returns:
+#         loss, accuracy: Avg loss, acc for 1 epoch
+#     """
+#     model.eval()
 
-    with torch.no_grad():
-        running_loss = 0
-        correct = 0
+#     with torch.no_grad():
+#         running_loss = 0
+#         correct = 0
 
-        sample_batch = []
-        sample_label = []
-        sample_prediction = []
+#         sample_batch = []
+#         sample_label = []
+#         sample_prediction = []
 
-        for i, (X, y) in enumerate(data_loader):
-            X, y = X.to(device), y.to(device)
+#         for i, (X, y) in enumerate(data_loader):
+#             X, y = X.to(device), y.to(device)
 
-            output = model(X)
+#             output = model(X)
 
-            # multi-class classification
-            _, pred = output.max(dim=1)
-            correct += torch.sum(pred.eq(y)).item()
-            running_loss += criterion(output, y).item() * X.size(0)
+#             # multi-class classification
+#             _, pred = output.max(dim=1)
+#             correct += torch.sum(pred.eq(y)).item()
+#             running_loss += criterion(output, y).item() * X.size(0)
 
-            if i == 0:
-                sample_batch.append(X)
-                sample_label.append(y)
-                sample_prediction.append(pred)
+#             if i == 0:
+#                 sample_batch.append(X)
+#                 sample_label.append(y)
+#                 sample_prediction.append(pred)
 
-        accuracy = correct / len(data_loader.dataset) # Avg acc
-        loss = running_loss / len(data_loader.dataset) # Avg loss
+#         accuracy = correct / len(data_loader.dataset) # Avg acc
+#         loss = running_loss / len(data_loader.dataset) # Avg loss
 
-        return loss, accuracy, sample_batch[0][:16], sample_label[0][:16], sample_prediction[0][:16]
+#         return loss, accuracy, sample_batch[0][:16], sample_label[0][:16], sample_prediction[0][:16]
 
-#Function to convert config dictionary to string for wandb run name
+# #Function to convert config dictionary to string for wandb run name
 def map_dict_to_str(config):
     config_str = ', '.join(f"{key}: {value}" for key, value in config.items() if key not in ['dataset', 'epochs', 'batch_size'])
     return config_str
 
+
 # Change config here
-config = {'dataset': 'MNIST',
-          'model': 'CNN',
-          'epochs': 10,
-          'batch_size': 64,
-          'optimizer': 'sgd',
-          'learning_rate': 1e-2,
-          'weight_decay': 0}
+# config = {'dataset': 'MNIST',
+#           'model': 'CNN',
+#           'epochs': 10,
+#           'batch_size': 64,
+#           'optimizer': 'sgd',
+#           'learning_rate': 1e-2,
+#           'weight_decay': 0}
 
 
 # Function to initialize wandb run with config
 def run(config):
-    wandb.init(project='YOUR PROJECT NAME', config=config)
+    # Import wandb and login
+    import wandb
+    wandb.login()
+    wandb.init(project='ppp6131-yonsei-university', config=config)
     wandb.run.name = map_dict_to_str(config)
 
     print('------')
@@ -296,22 +294,93 @@ def run(config):
     return 'Done'
 
 #hyperparameter 조합 모두 실험 가능. 아래는 example.
-model_list = ['CNN', 'MLP']
-optimizer_list = ['sgd', 'adam', 'adamw']
-learning_rate_list = [1e-2, 1e-3, 1e-4]
-weight_decay_list = [0, 1e-2]
+# model_list = ['CNN', 'MLP']
+# optimizer_list = ['sgd', 'adam', 'adamw']
+# learning_rate_list = [1e-2, 1e-3, 1e-4]
+# weight_decay_list = [0, 1e-2]
 
-for model in model_list:
-    for optimizer in optimizer_list:
-        for learning_rate in learning_rate_list:
-            for weight_decay in weight_decay_list:
-                config = {'dataset': 'MNIST',
-                          'model': model,
-                          'epochs': 10,
-                          'batch_size': 64,
-                          'optimizer': optimizer,
-                          'learning_rate': learning_rate,
-                          'weight_decay': weight_decay}
+# for model in model_list:
+#     for optimizer in optimizer_list:
+#         for learning_rate in learning_rate_list:
+#             for weight_decay in weight_decay_list:
+#                 config = {'dataset': 'MNIST',
+#                           'model': model,
+#                           'epochs': 10,
+#                           'batch_size': 64,
+#                           'optimizer': optimizer,
+#                           'learning_rate': learning_rate,
+#                           'weight_decay': weight_decay}
 
-                run(config)
-                clear_output(wait=True)
+#                 run(config)
+#                 clear_output(wait=True)
+
+
+import wandb
+import torch
+import os
+
+class WandbWriter:
+    def __init__(self, log_dir, logger, config, project_name="ppp6131-yonsei-university"):
+        """
+        WandbWriter for logging metrics, images, and models to Weights & Biases.
+        
+        Args:
+            log_dir (str): Directory to save model checkpoints.
+            logger: Logger object for debugging (e.g., logging.Logger).
+            config (dict): Configuration dictionary for wandb.init and experiment settings.
+            project_name (str): W&B project name (default: 'ppp6131-yonsei-university').
+        """
+        self.log_dir = log_dir
+        self.logger = logger
+        self.config = config
+
+        import os
+        os.environ['PYTHONUTF8'] = '1'
+        # Initialize wandb
+        wandb.login()
+        wandb.init(project=project_name, config=config)
+        wandb.run.name = self._map_dict_to_str(config)
+        self.logger.info(f"W&B run initialized: {wandb.run.name}")
+
+    def _map_dict_to_str(self, config):
+        """Convert config dict to a string for run name."""
+        parts = []
+        for key, value in config.items():
+            if isinstance(value, dict):
+                for subkey, subvalue in value.items():
+                    parts.append(f"{key}_{subkey}={subvalue}")
+            else:
+                parts.append(f"{key}={value}")
+        return "_".join(parts)
+
+    def add_scalar(self, key, value, step=None):
+        """Log a scalar metric to W&B."""
+        wandb.log({key: value}, step=step)
+        self.logger.debug(f"Logged scalar {key}: {value} at step {step}")
+
+    def add_image(self, key, image, caption=None, step=None):
+        """Log an image to W&B."""
+        wandb.log({key: wandb.Image(image, caption=caption)}, step=step)
+        self.logger.debug(f"Logged image {key} at step {step}")
+
+    def watch(self, model, criterion, log="all"):
+        """Monitor model and criterion gradients/parameters in W&B."""
+        wandb.watch(model, criterion, log=log)
+        self.logger.debug("Started watching model and criterion")
+
+    def save_model(self, model, path="Best_Model.pth"):
+        """Save model checkpoint and upload to W&B."""
+        save_path = os.path.join(self.log_dir, path)
+        torch.save(model.state_dict(), save_path)
+        wandb.save(save_path)
+        self.logger.info(f"Saved model to {save_path} and uploaded to W&B")
+
+    def log(self, metrics, step=None):
+        """Log a dictionary of metrics to W&B."""
+        wandb.log(metrics, step=step)
+        self.logger.debug(f"Logged metrics: {metrics} at step {step}")
+
+    def finish(self):
+        """Finish W&B run."""
+        wandb.finish()
+        self.logger.info("W&B run finished")

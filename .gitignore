@@ -82,6 +82,9 @@ celerybeat-schedule
 # dotenv
 .env
 
+# jupyter
+.ipynb
+
 # virtualenv
 .venv
 venv/
@@ -105,6 +108,7 @@ data/
 input/
 saved/
 datasets/
+wandb/
 
 # editor, os cache directory
 .vscode/
