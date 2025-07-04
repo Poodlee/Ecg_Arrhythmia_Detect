@@ -10,7 +10,7 @@
         "type": "Mit_bihDataLoader",
         "args":{
             "data_dir": "data/processed/mit_bih",
-            "batch_size": 12,
+            "batch_size": 16,
             "shuffle": true,
             "validation_split": 0.1,
             "num_workers": 2

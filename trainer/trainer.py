@@ -46,6 +46,7 @@ class Trainer(BaseTrainer):
 
             self.optimizer.zero_grad()
             output = self.model(data)
+            output = torch.softmax(output, dim=1) 
             loss = self.criterion(output, target)
             loss.backward()
             self.optimizer.step()
@@ -90,6 +91,7 @@ class Trainer(BaseTrainer):
                 data, target = data.to(self.device), target.to(self.device)
 
                 output = self.model(data)
+                output = torch.softmax(output, dim=1) 
                 loss = self.criterion(output, target)
 
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
@@ -100,7 +102,7 @@ class Trainer(BaseTrainer):
 
         # add histogram of model parameters to the tensorboard
         for name, p in self.model.named_parameters():
-            self.writer.add_histogram(name, p, bins='auto')
+            self.writer.add_histogram(name, p)
         return self.valid_metrics.result()
 
     def _progress(self, batch_idx):

@@ -354,60 +354,41 @@ class WandbWriter:
         return "_".join(parts)
 
     def set_step(self, step, scope=None):
-        """
-        Sets the default global step for subsequent W&B logging calls or
-        sets step for a specific scope (e.g., 'train', 'valid').
-
-        This function allows you to set a default 'step' value that will be
-        used by `add_scalar`, `add_image`, and `log` methods if their
-        'step' argument is not explicitly provided. This is useful for
-        managing the global training step (e.g., batch or epoch number).
-
-        Args:
-            step (int): The current global step value (e.g., iteration, epoch).
-            scope (str, optional): If provided, sets the step for a specific scope
-                                   (e.g., 'train' or 'valid'). Otherwise, sets the
-                                   global step.
-        """
         if scope is None:
-            # Set global step
             self._current_step = step
-            self.logger.debug(f"W&B global step set to: {self._current_step}")
         else:
-            # Set step for specific scope
             self._scope_steps[scope] = step
-            self.logger.debug(f"W&B step for scope '{scope}' set to: {step}")
+
+    def get_step(self, scope=None):
+        return self._scope_steps.get(scope, self._current_step)
 
     def add_scalar(self, key, value, step=None):
-        """Log a scalar metric to W&B."""
-        wandb.log({key: value}, step=step)
-        self.logger.debug(f"Logged scalar {key}: {value} at step {step}")
+        wandb.log({key: value}, step=step if step is not None else self._current_step)
 
     def add_image(self, key, image, caption=None, step=None):
-        """Log an image to W&B."""
-        wandb.log({key: wandb.Image(image, caption=caption)}, step=step)
-        self.logger.debug(f"Logged image {key} at step {step}")
+        wandb.log({key: wandb.Image(image, caption=caption)}, step=step if step is not None else self._current_step)
 
-    def watch(self, model, criterion, log="all"):
-        """Monitor model and criterion gradients/parameters in W&B."""
+    def add_histogram(self, name, values, step=None):
+        """
+        Logs a histogram. wandb.histogram() expects a 1D tensor or numpy array.
+        """
+        if isinstance(values, torch.Tensor):
+            values = values.detach().cpu().numpy()
+        wandb.log({name: wandb.Histogram(values)}, step=step if step is not None else self._current_step)
+
+    def watch(self, model, criterion=None, log="all"):
         wandb.watch(model, criterion, log=log)
-        self.logger.debug("Started watching model and criterion")
 
     def save_model(self, model, path="Best_Model.pth"):
-        """Save model checkpoint and upload to W&B."""
         save_path = os.path.join(self.log_dir, path)
         torch.save(model.state_dict(), save_path)
         wandb.save(save_path)
         self.logger.info(f"Saved model to {save_path} and uploaded to W&B")
 
     def log(self, metrics, step=None):
-        """Log a dictionary of metrics to W&B."""
-        wandb.log(metrics, step=step)
-        self.logger.debug(f"Logged metrics: {metrics} at step {step}")
+        wandb.log(metrics, step=step if step is not None else self._current_step)
 
     def finish(self):
-        """Finish W&B run."""
         wandb.finish()
-        self.logger.info("W&B run finished")
         
         

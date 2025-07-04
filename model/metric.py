@@ -1,6 +1,6 @@
 import torch
 
-def accuracy(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.7) -> float:
+def accuracy(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.3) -> float:
     """
     Computes the overall multi-label accuracy (exact match ratio).
 
@@ -17,7 +17,7 @@ def accuracy(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.7) 
     return correct.mean().item()
 
 
-def sensitivity(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.7) -> float:
+def sensitivity(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.3) -> float:
     """
     Computes macro-averaged sensitivity (recall) across all classes.
 
@@ -36,7 +36,7 @@ def sensitivity(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.
     return recall.mean().item()
 
 
-def precision(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.7) -> float:
+def precision(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.3) -> float:
     """
     Computes macro-averaged precision across all classes.
 
@@ -55,7 +55,7 @@ def precision(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.7)
     return prec.mean().item()
 
 
-def f1_score(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.7) -> float:
+def f1_score(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.3) -> float:
     """
     Computes macro-averaged F1-score across all classes.
 
@@ -74,7 +74,7 @@ def f1_score(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.7) 
     return 2 * (prec * rec) / (prec + rec)
 
 
-def macro_metrics(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.7) -> dict:
+def macro_metrics(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.3) -> dict:
     """
     Computes a dictionary of macro-averaged metrics.
 
