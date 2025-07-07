@@ -376,8 +376,12 @@ class WandbWriter:
             values = values.detach().cpu().numpy()
         wandb.log({name: wandb.Histogram(values)}, step=step if step is not None else self._current_step)
 
-    def watch(self, model, criterion=None, log="all"):
+    def wandb_donot_watch(self, model, criterion=None, log="none"):
+        wandb.watch(model, criterion, log="none")
+    
+    def watch(self, model, criterion=None, log="none"):
         wandb.watch(model, criterion, log=log)
+
 
     def save_model(self, model, path="Best_Model.pth"):
         save_path = os.path.join(self.log_dir, path)
