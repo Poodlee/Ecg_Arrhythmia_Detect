@@ -61,7 +61,6 @@ def main(config):
     trainer.train()
 
 
-
 if __name__ == '__main__':
     set_random_seeds()
     
