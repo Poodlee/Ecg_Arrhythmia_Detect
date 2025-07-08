@@ -1,17 +1,13 @@
 import argparse
-import collections
 import torch
 import numpy as np
-import data_loader.data_loaders as module_data
-from model.loss import LossSelector as module_loss
-import model.metric as module_metric
-import model.model as module_arch
-from parse_config import ConfigParser
+import json
+from data_loader import DataLoaderFactory
+from model import ModelFactory
+from loss import LossFactory
+import metric as module_metric
 from trainer import Trainer
-from utils import prepare_device
 
-
-# fix random seeds for reproducibility
 def set_random_seeds(seed=7):
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
@@ -20,35 +16,33 @@ def set_random_seeds(seed=7):
 
 def main(config):
 
-    data_loader = config.init_obj('data_loader', module_data)
+    data_loader = DataLoaderFactory.get_dataloader(config['data_loader']['type'], **config['data_loader']['args'])
     valid_data_loader = data_loader.split_validation()
+    model = ModelFactory.get_model((config['arch']['type']))
 
-    model = config.init_obj('arch', module_arch)
-
-    device, device_ids = prepare_device(config['n_gpu'])
+    device = config['gpu']
     model = model.to(device)
-    if len(device_ids) > 1:
-        print(f"🧪 Using DataParallel on {len(device_ids)} GPUs: {device_ids}")
-        model = torch.nn.DataParallel(model, device_ids=device_ids)
-    else:
-        print(f"🧪 Using single GPU: {device}")
-
+    for param in model.parameters():
+        param.requires_grad = True
+    
     loss_config = config['loss']
-    criterion = module_loss(
+    criterion = LossFactory(
         loss_type=loss_config.get('type', 'bce'),
         alpha=loss_config.get('alpha', 0.25),
         gamma=loss_config.get('gamma', 2.0),
         pos_weight=loss_config.get('pos_weight', None),
         class_weights=loss_config.get('class_weights', None)
-    ).get_loss()
+    )
 
     metrics = [getattr(module_metric, met) for met in config['metrics']]
 
-    trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-    optimizer = config.init_obj('optimizer', torch.optim, trainable_params)
+    trainable_params = list(filter(lambda p: p.requires_grad, model.parameters()))
+    optimizer = getattr(torch.optim, config['optimizer']['type'])
+    optimizer = optimizer(trainable_params, **config['optimizer']['args'])
 
-    lr_scheduler = config.init_obj('lr_scheduler', torch.optim.lr_scheduler, optimizer)
-    
+    lr_scheduler = getattr(torch.optim.lr_scheduler, config['lr_scheduler']['type'])
+    lr_scheduler = lr_scheduler(optimizer, **config['lr_scheduler']['args'])
+
     trainer = Trainer(
         model, criterion, metrics, optimizer,
         config=config,
@@ -57,7 +51,6 @@ def main(config):
         valid_data_loader=valid_data_loader,
         lr_scheduler=lr_scheduler
     )
-
     trainer.train()
 
 
@@ -72,11 +65,8 @@ if __name__ == '__main__':
     args.add_argument('-d', '--device', default="0", type=str,
                       help='indices of GPUs to enable (default: all)')
 
-    # custom cli options to modify configuration from default values given in json file.
-    CustomArgs = collections.namedtuple('CustomArgs', 'flags type target')
-    options = [
-        CustomArgs(['--lr', '--learning_rate'], type=float, target='optimizer;args;lr'),
-        CustomArgs(['--bs', '--batch_size'], type=int, target='data_loader;args;batch_size')
-    ]
-    config = ConfigParser.from_args(args, options)
+    config_path = args.parse_args().config
+    
+    with open(config_path, 'r') as f:
+        config = json.load(f)
     main(config)

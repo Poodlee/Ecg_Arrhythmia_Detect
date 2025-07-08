@@ -3,6 +3,12 @@ from abc import abstractmethod
 from numpy import inf
 from logger import WandbWriter
 
+import logging
+LOG_LEVELS = {
+    0: logging.WARNING,
+    1: logging.INFO,
+    2: logging.DEBUG
+}
 
 class BaseTrainer:
     """
@@ -10,7 +16,12 @@ class BaseTrainer:
     """
     def __init__(self, model, criterion, metric_ftns, optimizer, config):
         self.config = config
-        self.logger = config.get_logger('trainer', config['trainer']['verbosity'])
+        verbosity = config['trainer']['verbosity']
+        assert verbosity in LOG_LEVELS, f"Invalid verbosity level: {verbosity}. Valid options: {list(LOG_LEVELS.keys())}"
+
+        self.logger = logging.getLogger('trainer')
+        self.logger.setLevel(LOG_LEVELS[verbosity])
+
 
         self.model = model
         self.criterion = criterion
@@ -37,13 +48,13 @@ class BaseTrainer:
 
         self.start_epoch = 1
 
-        self.checkpoint_dir = config.save_dir
+        self.checkpoint_dir = config['trainer']['save_dir']
 
         # setup visualization writer instance                
-        self.writer = WandbWriter(config.log_dir, self.logger, config)
+        self.writer = WandbWriter(config['log_dir'], self.logger, config)
         
 
-        if config.resume is not None:
+        if config['resume'] is not None:
             self._resume_checkpoint(config.resume)
 
     @abstractmethod
@@ -60,7 +71,6 @@ class BaseTrainer:
         Full training logic
         """
         not_improved_count = 0
-        print(f"▶️ Starting training from epoch {self.start_epoch} to {self.epochs}")
         
         for epoch in range(self.start_epoch, self.epochs + 1):
             print(f"\n📘 Epoch {epoch} starting...")

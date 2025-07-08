@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from timm.layers import trunc_normal_, DropPath
 from base import BaseModel
-    
+
 # Total params: 30,762
 class ConvNet(nn.Module):
     def __init__(self):
@@ -204,9 +204,9 @@ def convnextv2_huge(**kwargs):
     model = ConvNeXtV2(depths=[3, 3, 27, 3], dims=[352, 704, 1408, 2816], **kwargs)
     return model
     
-class FivePapers(nn.Module):
+class PMAT(BaseModel):
     def __init__(self, L=4):
-        super(FivePapers, self).__init__()        
+        super(PMAT, self).__init__()        
         self.conv1 = nn.Conv2d(3, 32, (5, 5))
         self.conv2 = nn.Conv2d(32, 64, (5, 5))
         self.conv3 = nn.Conv2d(64, 128, (3, 3))
@@ -249,3 +249,26 @@ class FivePapers(nn.Module):
         x = F.relu(self.fc11(x))
         x = self.fc2(x)
         return x
+    
+class ModelFactory:
+    _model_map = {
+        'convnet': ConvNet,
+        'mlpnet': MLPNet,
+        'convnextv2_atto': convnextv2_atto,
+        'convnextv2_femto': convnextv2_femto,
+        'convnext_pico': convnext_pico,
+        'convnextv2_nano': convnextv2_nano,
+        'convnextv2_tiny': convnextv2_tiny,
+        'convnextv2_base': convnextv2_base,
+        'convnextv2_large': convnextv2_large,
+        'convnextv2_huge': convnextv2_huge,
+        'pmat': PMAT,
+    }
+
+    @staticmethod
+    def get_model(model_type, *args, **kwargs):
+        model_type = model_type.lower()
+        if model_type not in ModelFactory._model_map:
+            raise ValueError(f"지원하지 않는 모델 타입입니다: {model_type}")
+        model_class = ModelFactory._model_map[model_type]
+        return model_class(*args, **kwargs)

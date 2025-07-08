@@ -16,7 +16,7 @@ import torchvision.transforms as tr
 import torchvision.models as models
 
 from IPython.display import clear_output
-from model.metric import macro_metrics, PerClassMetrics  # metric 함수들 임포트 필요
+from metric import macro_metrics, PerClassMetrics  # metric 함수들 임포트 필요
 
 
 # def seed_everything(seed = 21):
@@ -345,7 +345,7 @@ class WandbWriter:
     def _map_dict_to_str(self, config):
         """Convert config dict to a string for run name."""
         parts = []
-        for key, value in config.config.items():
+        for key, value in config.items():
             if isinstance(value, dict):
                 for subkey, subvalue in value.items():
                     parts.append(f"{key}_{subkey}={subvalue}")
@@ -375,6 +375,9 @@ class WandbWriter:
         if isinstance(values, torch.Tensor):
             values = values.detach().cpu().numpy()
         wandb.log({name: wandb.Histogram(values)}, step=step if step is not None else self._current_step)
+
+    def wandb_donot_watch(self, model, criterion=None, log="none"):
+        wandb.watch(model, criterion, log="none")
 
     def watch(self, model, criterion=None, log="all"):
         wandb.watch(model, criterion, log=log)

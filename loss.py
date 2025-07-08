@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class LossSelector:
+class LossFactory:
     def __init__(self, loss_type, alpha, gamma, pos_weight, class_weights):
         """
         loss_type: 'bce', 'focal', 'asymmetric'

@@ -1,13 +1,13 @@
 {
     "name": "Test Setting",
-    "n_gpu": 1,
-
+    "gpu": "cuda:0",
+    "resume": null,
     "arch": {
-        "type": "FivePapers",
+        "type": "pmat",
         "args": {}
     },
     "data_loader": {
-        "type": "Mit_bihDataLoader",
+        "type": "mit_bih",
         "args":{
             "data_dir": "data/mit_bih",
             "batch_size": 16,

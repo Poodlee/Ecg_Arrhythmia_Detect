@@ -11,7 +11,22 @@ from torchvision import transforms
 from ecg_pipeline import bandpass_filter, stockwell_transform, standardize_signal
 from PIL import Image
 
+class DataLoaderFactory:
+    _dataloader_map = {
+        'mnist': 'MnistDataLoader',
+        'mit_bih': 'Mit_bihDataLoader',
+    }
 
+    @staticmethod
+    def get_dataloader(data_type, *args, **kwargs):
+        if data_type.lower() not in DataLoaderFactory._dataloader_map:
+            raise ValueError(f"지원하지 않는 데이터 타입입니다: {data_type}")
+        dataloader_class_name = DataLoaderFactory._dataloader_map[data_type.lower()]
+        dataloader_class = globals().get(dataloader_class_name)
+        if dataloader_class is None:
+            raise ImportError(f"{dataloader_class_name} 클래스를 찾을 수 없습니다.")
+        return dataloader_class(*args, **kwargs)
+    
 # Datasets 및 DataLoader 설정
 
 # class MnistDataLoader(BaseDataLoader):
@@ -120,26 +135,37 @@ class Mit_bihDataset(Dataset):
         
         # 처리된 데이터 저장 경로
         self.processed_dir = os.path.join(data_path, 'processed', split)
-        os.makedirs(self.processed_dir, exist_ok=True)
-        
-        # 데이터 파일 경로
-        self.data_file = os.path.join(self.processed_dir, 'data.pt')
-        
+                
         # 데이터가 이미 존재하는지 확인
+        self.data_file = os.path.join(self.processed_dir, f"{split}_infos.pt")
+        
         if os.path.exists(self.data_file):
-            data = torch.load(self.data_file)
-            self.x1 = data['x1']
-            self.x2 = data['x2']
-            self.y = data['y']
+            
+            split_infos = torch.load(self.data_file, weights_only=False)
+            self.x1 = split_infos['x1']
+            
+            x2_np = np.array(split_infos['x2']).astype(np.float64)
+            
+            # StandardScaler 적용
+            mean = x2_np.mean(axis=0)
+            std = x2_np.std(axis=0)
+            std[std == 0] = 1.0  
+            x2_scaled = (x2_np - mean) / std
+            self.x2 = torch.tensor(x2_scaled, dtype=torch.float32)
+            
+            self.y = torch.LongTensor(split_infos['y'])
+            
         else:
+            os.makedirs(self.processed_dir, exist_ok=True)
+
             # 데이터 전처리
             scaled_signals, r_peak_list, ann_list = prepare_scaled_records(
-                self.records, database='mit', sampling_rate=self.fs, path_str=self.data_path
+                self.records, database='mit_bih', sampling_rate=self.fs, path_str=self.data_path
             )
             
             # 특징 추출 및 데이터 준비
             self.x1, self.x2, self.y = getXY(
-                scaled_signals, r_peak_list, ann_list, database='mit', sampling_rate=self.fs, train=(split == 'train')
+                scaled_signals, r_peak_list, ann_list, database='mit_bih', sampling_rate=self.fs, train=(split == 'train')
             )
             
             # 데이터 저장
@@ -153,13 +179,13 @@ class Mit_bihDataset(Dataset):
         return len(self.y)
     
     def __getitem__(self, idx):
-        x1_path = self.x1[idx]
-        x1 = torch.load(x1_path) 
+        path_x1 = self.x1[idx]
+        x1 = torch.load(path_x1) 
         x2 = torch.tensor(self.x2[idx], dtype=torch.float32)
         y = torch.tensor(self.y[idx], dtype=torch.long)
         
         if self.transform:
             x1 = self.transform(x1)
         
-        return {'x1': x1,'x2': x2,'y': y}
+        return {'x1': x1,'x2': x2}, y
 
