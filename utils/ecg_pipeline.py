@@ -306,8 +306,8 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train)
             #shapirotest = shapiro(heartbeat)                       
             
             subset = 'train' if train else 'test'
-            os.makedirs(f'.\\{database}\\pmat\\{subset}', exist_ok=True)                        
-            path_current = f'.\\{database}\\pmat\\{subset}\\x1_{i}_{r}.pt' 
+            os.makedirs(f'.\\data\\{database}\\processed\\{subset}', exist_ok=True)                        
+            path_current = f'.\\data\\{database}\\processed\\{subset}\\x1_{i}_{r}.pt' 
             
             # Scale the heartbeat            
             heartbeat = (heartbeat-heartbeat.min())/(heartbeat.max()-heartbeat.min())                                    

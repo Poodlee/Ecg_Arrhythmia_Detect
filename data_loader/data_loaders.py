@@ -97,7 +97,7 @@ from PIL import Image
 from utils.ecg_pipeline import prepare_scaled_records, getXY
 
 class Mit_bihDataLoader(BaseDataLoader):
-    def __init__(self, data_dir, batch_size=32, shuffle=True, validation_split=0.1, num_workers=8, fs=360):
+    def __init__(self, data_dir, batch_size=32, shuffle=True, validation_split=0.0, num_workers=8, fs=360):
         self.dataset = Mit_bihDataset(data_path=data_dir, split='train' if validation_split > 0 else 'test', fs=fs)
         super().__init__(self.dataset, batch_size, shuffle, validation_split, num_workers)
 
@@ -127,19 +127,19 @@ class Mit_bihDataset(Dataset):
         
         # 데이터가 이미 존재하는지 확인
         if os.path.exists(self.data_file):
-            data = torch.load(self.data_file)
+            data = torch.load(self.data_file, weights_only=False)
             self.x1 = data['x1']
             self.x2 = data['x2']
             self.y = data['y']
         else:
             # 데이터 전처리
             scaled_signals, r_peak_list, ann_list = prepare_scaled_records(
-                self.records, database='mit', sampling_rate=self.fs, path_str=self.data_path
+                self.records, database='mit_bih', sampling_rate=self.fs, path_str=self.data_path
             )
             
             # 특징 추출 및 데이터 준비
             self.x1, self.x2, self.y = getXY(
-                scaled_signals, r_peak_list, ann_list, database='mit', sampling_rate=self.fs, train=(split == 'train')
+                scaled_signals, r_peak_list, ann_list, database='mit_bih', sampling_rate=self.fs, train=(split == 'train')
             )
             
             # 데이터 저장
@@ -161,5 +161,5 @@ class Mit_bihDataset(Dataset):
         if self.transform:
             x1 = self.transform(x1)
         
-        return {'x1': x1,'x2': x2,'y': y}
+        return {'x1': x1,'x2': x2}, y
 

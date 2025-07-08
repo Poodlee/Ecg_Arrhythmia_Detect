@@ -205,7 +205,7 @@ def convnextv2_huge(**kwargs):
     return model
     
 class FivePapers(nn.Module):
-    def __init__(self, L=128):
+    def __init__(self):
         super(FivePapers, self).__init__()        
         self.conv1 = nn.Conv2d(3, 32, (5, 5))
         self.conv2 = nn.Conv2d(32, 64, (5, 5))
@@ -217,7 +217,7 @@ class FivePapers(nn.Module):
         self.pooling2 = nn.MaxPool2d(3)
         self.pooling3 = nn.AdaptiveMaxPool2d((1, 1))
         self.fc0 = nn.Linear(128,128)
-        self.fc1 = nn.Linear(L,128)    
+        self.fc1 = nn.Linear(4,128)    
         self.fc11 = nn.Linear(256,64)
         self.fc2 = nn.Linear(64, 3)
 
@@ -240,8 +240,8 @@ class FivePapers(nn.Module):
 
     def forward(self, **kwarg):
         x2 = kwarg['x2']
-        x1 = kwarg['x1']                
-
+        x1 = kwarg['x1']
+                  
         x1 = self.extract_features(x1)
         x1 = F.relu(self.fc0(x1))
         x2 = F.relu(self.fc1(x2))        
