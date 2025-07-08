@@ -1,7 +1,9 @@
 {
     "name": "Test Setting",
+    "n_gpu": 1,
     "gpu": "cuda:0",
-    "resume": null,
+    "resume": "saved/20250708-150321/model_best.pth",
+    "output_dir": "outputs/",
     "arch": {
         "type": "pmat",
         "args": {}
@@ -13,7 +15,6 @@
             "batch_size": 512,
             "shuffle": "False",
             "validation_split": 0.0,
-            "training": "False",
             "num_workers": 2
         }
     },

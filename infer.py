@@ -2,12 +2,23 @@ import argparse
 import torch
 import numpy as np
 import json
-import logger
+import logging
 from tqdm import tqdm
 from data_loader import DataLoaderFactory
 from model import ModelFactory
 from loss import LossFactory
 import metric as module_metric
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+from sklearn.metrics import confusion_matrix
+from datetime import datetime
+
+from sklearn.metrics import roc_curve, auc
+from visualize import GradCam
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 def set_random_seeds(seed=7):
     torch.manual_seed(seed)
@@ -32,7 +43,7 @@ def main(config):
     metrics = [getattr(module_metric, met) for met in config['metrics']]
 
     logger.info('Loading checkpoint: {} ...'.format(config['resume']))
-    checkpoint = torch.load(config['resume'])
+    checkpoint = torch.load(config['resume'], weights_only=False)
     state_dict = checkpoint['state_dict']
     if config['n_gpu'] > 1:
         model = torch.nn.DataParallel(model)
@@ -46,17 +57,25 @@ def main(config):
     total_loss = 0.0
     total_metrics = torch.zeros(len(metrics))
 
+    all_preds, all_targets, all_probs = [], [], []
+  
+    n_classes = 3
     with torch.no_grad():
         for i, (data, target) in enumerate(tqdm(data_loader)):
-            data, target = data.to(device), target.to(device)
-            preds = model(data)
-
+            data, target = {k: v.to(device) for k,v in data.items()}, target.to(device)
+            preds = model(**data)
+            
+            # Save for confusion matrix
+            all_probs.append(torch.softmax(preds, dim=1).cpu().numpy())
+            all_preds.extend(torch.argmax(preds, dim=1).cpu().numpy())
+            all_targets.extend(target.cpu().numpy())
+            
             # computing loss, metrics on test set
             loss = loss_fn(preds, target)
-            batch_size = data.shape[0]
+            batch_size = config['data_loader']['args']['batch_size']
             total_loss += loss.item() * batch_size
             for i, metric in enumerate(metrics):
-                total_metrics[i] += metric(preds, target) * batch_size
+                total_metrics[i] += metric(preds, target, n_classes) * batch_size
 
     n_samples = len(data_loader.sampler)
     log = {'loss': total_loss / n_samples}
@@ -65,6 +84,84 @@ def main(config):
     })
     logger.info(log)
 
+    ####################
+    # === HEAT MAP === #
+    ####################
+    cf_matrix = confusion_matrix(all_targets, all_preds)
+    classes_ = ['N', 'S', 'V']
+    N = len(classes_)
+
+    group_counts = ['{0:0.0f}'.format(value) for value in cf_matrix.flatten()]
+    group_percentages = ['{0:.2%}'.format(cf_matrix.flatten()[i]/np.sum(cf_matrix[int(i/N)])) for i in range(N*N)]
+    labels_ = [f'{x}\n{y}' for x, y in zip(group_counts, group_percentages)]
+    labels_ = np.asarray(labels_).reshape(N, N)
+
+    fig, ax = plt.subplots(figsize=(6,5))
+    sns.heatmap(cf_matrix,
+                vmin=0,
+                vmax=cf_matrix.max(),
+                annot=labels_,
+                linewidths=.5,
+                ax=ax,
+                fmt='',
+                cmap='crest',
+                annot_kws={"weight": "bold"},
+                xticklabels=classes_,
+                yticklabels=classes_
+    ).set(title='Confusion Matrix: Inference')
+
+    # Save heatmap
+    time = datetime.now().strftime('%Y%m%d-%H%M%S')
+
+    os.makedirs(config['output_dir'], exist_ok=True)
+    heatmap_path = os.path.join(config['output_dir'], f'confusion_matrix_heatmap_{time}.png')
+    plt.savefig(heatmap_path, dpi=300, bbox_inches='tight')
+    logger.info(f"Heatmap saved to {heatmap_path}")
+ 
+    #####################
+    # === ROC & AUC === #
+    #####################
+    all_probs = np.concatenate(all_probs, axis=0)
+    y_true = np.array(all_targets)
+    y_true_onehot = np.eye(N)[y_true]
+
+    fpr = dict()
+    tpr = dict()
+    roc_auc = dict()
+
+    for i in range(N):
+        fpr[i], tpr[i], _ = roc_curve(y_true_onehot[:, i], all_probs[:, i])
+        roc_auc[i] = auc(fpr[i], tpr[i])
+
+    plt.figure(figsize=(6, 5))
+    for i in range(N):
+        plt.plot(fpr[i], tpr[i], label=f'{classes_[i]} (AUC = {roc_auc[i]:.2f})')
+
+    plt.plot([0, 1], [0, 1], 'k--', lw=1)
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC Curve (Multiclass)')
+    plt.legend(loc='lower right')
+    rocauc_path = os.path.join(config['output_dir'], f'roc_curve_{time}.png')
+    plt.savefig(rocauc_path, dpi=300, bbox_inches='tight')
+    logger.info(f"Heatmap saved to {rocauc_path}")
+
+    #####################
+    # === GRAD  CAM === #
+    #####################
+    sample_data, _ = next(iter(data_loader))
+    sample = {k: v.to(device) for k,v in sample_data.items()}
+    target_layer = model.conv3 if hasattr(model, 'conv3') else list(model.children())[-1]
+    gradcam = GradCam(model, target_layer)
+    heatmap = gradcam.generate_heatmap(sample, class_idx=int(all_preds[0]))
+    overlay = GradCam.overlay_heatmap(sample['x1'], heatmap[0])
+    plt.figure(figsize=(8,4))
+    plt.subplot(1,2,1); plt.title("Original"); plt.imshow(sample['x1'][0].cpu().squeeze().permute(1,2,0), cmap='gray'); plt.axis('off')
+    plt.subplot(1,2,2); plt.title("Grad-CAM"); plt.imshow(overlay.transpose(1,2,0), cmap='jet'); plt.axis('off')
+    plt.savefig(os.path.join(config['output_dir'], f'gradcam_sample_{time}.png'), dpi=300, bbox_inches='tight')
+
+    print(f"GRAD CAM result saved to {os.path.join(config['output_dir'], f'gradcam_sample_{time}.png')}")
+  
 
 if __name__ == '__main__':
     args = argparse.ArgumentParser(description='PyTorch Template')
@@ -77,220 +174,3 @@ if __name__ == '__main__':
     with open(config_path, 'r') as f:
         config = json.load(f)
     main(config)
-
-
-
-####################################
-########## PMAT Algorithm ##########
-####################################
-with torch.no_grad():
-    y_true, y_pred = y_test, net.predict(test_ds)
-    y_true = np.array(y_true).astype(np.int64)
-    y_pred = np.array(y_pred).astype(np.int64)
-    cf_matrix = confusion_matrix(y_true, y_pred)
-    print(cf_matrix)
-    print(classification_report(y_true, y_pred, digits=4))
-    
-    import seaborn as sns
-classes_ = ['N', 'S', 'V']
-N = 3
-group_counts = ['{0:0.0f}'.format(value) for value in cf_matrix.flatten()]
-group_percentages = ['{0:.2%}'.format(cf_matrix.flatten()[i]/np.sum(cf_matrix[int(i/N)])) for i in range(N*N)]
-labels_ = [f'{y}' for x,y in zip(group_percentages, group_counts)]
-#labels_ = [f'{y}' for x,y in zip(group_counts, group_percentages)]
-labels_ = np.asarray(labels_).reshape(N,N)
-fig, ax = plt.subplots(figsize=(4,3))
-
-sns.heatmap(cf_matrix, 
-            vmin=0, 
-            vmax=420,
-            annot=labels_, 
-            linewidths=.5, 
-            ax=ax, 
-            fmt='', 
-            cmap='crest', # Blues, RdBu_r, BuPu, crest
-            annot_kws={"weight": "bold"},
-            xticklabels=classes_, 
-            yticklabels=classes_
-           ).set(title='Training on MIT-BIH Testing on STT')
-
-
-# ROC and AUC
-from sklearn.metrics import roc_curve, auc
-import matplotlib.pyplot as plt
-
-# Get predicted probabilities
-with torch.no_grad():
-    y_proba = net.predict_proba(test_ds)  # Probabilities for each class
-
-# Convert true labels to one-hot encoding for multiclass ROC calculation
-num_classes = y_proba.shape[1]
-y_true_onehot = np.eye(num_classes)[y_true]
-
-# Calculate ROC and AUC for each class
-fpr = {}
-tpr = {}
-roc_auc = {}
-
-for i in range(num_classes):
-    fpr[i], tpr[i], _ = roc_curve(y_true_onehot[:, i], y_proba[:, i])
-    roc_auc[i] = auc(fpr[i], tpr[i])
-
-# Plot the ROC curves
-plt.figure()
-for i in range(num_classes):
-    plt.plot(fpr[i], tpr[i], label=f"{classes_[i]} (AUC = {roc_auc[i]:.2f})")
-
-plt.plot([0, 1], [0, 1], 'k--')  # Diagonal line for random guess
-plt.xlabel("False Positive Rate")
-plt.ylabel("True Positive Rate")
-plt.title("ROC Curve")
-plt.legend(loc="lower right")
-plt.show()
-# Gradient-weighted Class Activation Mapping
-class GradCam:
-    def __init__(self, skorch_net, target_layer):
-        """
-        Initialize Grad-CAM with the skorch NeuralNetClassifier and the target layer.
-        """
-        self.net = skorch_net.module_  # Access the PyTorch model
-        self.target_layer = target_layer
-        self.gradients = None
-        self.feature_maps = None
-
-        # Register hooks
-        self.target_layer.register_forward_hook(self._save_feature_maps)
-        self.target_layer.register_backward_hook(self._save_gradients)
-
-    def _save_feature_maps(self, module, input, output):
-        """
-        Save the feature maps during the forward pass.
-        """
-        self.feature_maps = output
-
-    def _save_gradients(self, module, grad_input, grad_output):
-        """
-        Save the gradients during the backward pass.
-        """
-        self.gradients = grad_output[0]
-
-    def generate_heatmap(self, x, class_idx=None):
-        """
-        Generate Grad-CAM heatmap.
-        """
-        self.net.zero_grad()  # Reset gradients on the underlying PyTorch model
-        output = self.net(**x)  # Pass input through the PyTorch model
-
-        if class_idx is None:
-            class_idx = torch.argmax(output)
-
-        # Backpropagate to get gradients
-        class_score = output[:, class_idx]
-        class_score.backward()
-
-        # Compute Grad-CAM
-        gradients = self.gradients.detach()
-        feature_maps = self.feature_maps.detach()
-        weights = torch.mean(gradients, dim=(2, 3), keepdim=True)
-                
-        cam = torch.sum(weights * feature_maps, dim=1).squeeze() 
-        
-        if F.relu(cam).sum()!=0:
-            cam = F.relu(cam)  # Apply ReLU to focus on positive contributions 
-        else:
-            cam = 1-cam
-        #plt.imshow(cam.to('cpu'))
-        
-        # Normalize heatmap        
-        cam = (cam - cam.min()) / (cam.max() - cam.min())
-        return cam
-
-    @staticmethod
-    def overlay_heatmap(image, heatmap, alpha, cmap='jet'):
-        """
-        Overlay the Grad-CAM heatmap on the original image.
-        """
-        import cv2
-    
-        # Convert heatmap to numpy array
-        heatmap = heatmap.cpu().numpy()        
-        image = image.squeeze().cpu().numpy()  
-        # Resize heatmap to match the input image dimensions
-        #heatmap_resized = cv2.resize(heatmap, (image.shape[2], image.shape[1]))  # Resize to (H, W)
-        heatmap_resized = cv2.resize(heatmap, (120, 120))  # Resize to (H, W)                
-        heatmap_resized = np.uint8(255 * heatmap_resized)
-        heatmap_resized = np.where(heatmap_resized>100,heatmap_resized,heatmap_resized-10)
-        
-        #heatmap_colored = cv2.applyColorMap(heatmap_resized, cv2.COLORMAP_JET)  # Apply a colormap
-        
-        a, b = image.min(), image.max()        
-        #heatmap_resized = normalize_tensor(heatmap_resized, a, b)                        
-        # Normalize and convert image to range 0-255
-        if len(image.shape) == 2:  # If grayscale
-            #print('GRAYSCALE')
-            image = np.uint8(255 * (image - image.min()) / (image.max() - image.min()))
-            #image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)  # Convert to 3-channel (BGR)
-        else:  # If RGB or multi-channel
-            image = np.uint8(255 * (image - image.min()) / (image.max() - image.min()))
-    
-        # Blend the heatmap with the original image
-                    
-        #plt.imshow(heatmap_colored)
-        #overlayed = cv2.addWeighted(image, 1 - alpha, heatmap_colored, alpha, 0)                
-        return image + heatmap_resized*alpha
-    
-def read_beat(path):
-    path_splitted = path.split('_')
-    n, r = int(path_splitted[-2]), int(path_splitted[-1].split('.')[0])    
-    ecg = scaled_signals2_mit[n]
-    annotations = np.array(ann_list2_mit[n])
-    rpeaks = np.array(r_peak_list2_mit[n])
-    
-     #r_peak_list1_mit[0][idx]
-    idx = np.where(rpeaks==r)[0][0]
-    #print(annotations[idx])
-    
-    return ecg[r-110:r+120]
-
-idx = np.array([i for i in range(len(y_pred)) if y_pred[i]==2 and y_test[i]==2])
-#print(idx[1000:1100])
-
-from matplotlib.pyplot import cm
-
-iterator = iter(test_ds)
-class_idx = 2
-i=-1
-beat_no = 30599 
-while(i<beat_no):
-    item=next(iterator)[0]
-    i+=1
-
-path = test_infos['x1'][beat_no]
-print(path)
-beat = read_beat(path)
-# Example Usage:
-target_layer = net.module_.conv3  # Specify the target convolutional layer
-grad_cam = GradCam(skorch_net=net, target_layer=target_layer)
-
-# Prepare inputs for Grad-CAM
-sample_x1, sample_x2 = item['x1'], torch.tensor(item['x2']).to('cuda')  # Replace with a valid sample from your dataset
-
-sample_x1 = sample_x1.unsqueeze(0).to('cuda')  # Add batch dimension
-sample_x2 = sample_x2.unsqueeze(0).to('cuda')
-
-# Generate Grad-CAM heatmap
-heatmap = grad_cam.generate_heatmap({'x1': sample_x1, 'x2': sample_x2}, class_idx=class_idx)  # Replace with the desired class index
-
-# Overlay and visualize
-overlayed_image = GradCam.overlay_heatmap(sample_x1, heatmap, alpha=0.3)
-
-plt.figure(figsize=(10,3))
-plt.subplot(131)
-plt.plot(beat)
-plt.subplot(132)
-plt.imshow(item['x1'][0], cmap='jet')
-plt.subplot(133)
-plt.imshow(overlayed_image, cmap='jet')
-
-plt.axis('off')
-plt.show()
