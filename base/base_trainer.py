@@ -2,7 +2,7 @@ import torch
 from abc import abstractmethod
 from numpy import inf
 from logger import WandbWriter
-
+import os
 import logging
 LOG_LEVELS = {
     0: logging.WARNING,
@@ -24,7 +24,7 @@ class BaseTrainer:
 
 
         self.model = model
-        self.criterion = criterion
+        self.criterion = criterion.get_loss()
         self.metric_ftns = metric_ftns
         self.optimizer = optimizer
 
@@ -139,11 +139,13 @@ class BaseTrainer:
             'monitor_best': self.mnt_best,
             'config': self.config
         }
-        filename = str(self.checkpoint_dir / 'checkpoint-epoch{}.pth'.format(epoch))
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+        filename = os.path.join(self.checkpoint_dir, f'checkpoint-epoch{epoch}.pth')
         torch.save(state, filename)
         self.logger.info("Saving checkpoint: {} ...".format(filename))
         if save_best:
-            best_path = str(self.checkpoint_dir / 'model_best.pth')
+            best_path = os.path.join(self.checkpoint_dir, 'model_best.pth')
+
             torch.save(state, best_path)
             self.logger.info("Saving current best: model_best.pth ...")
 

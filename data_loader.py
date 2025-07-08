@@ -181,8 +181,8 @@ class Mit_bihDataset(Dataset):
     def __getitem__(self, idx):
         path_x1 = self.x1[idx]
         x1 = torch.load(path_x1) 
-        x2 = torch.tensor(self.x2[idx], dtype=torch.float32)
-        y = torch.tensor(self.y[idx], dtype=torch.long)
+        x2 = self.x2[idx].detach().clone().to(torch.float32)
+        y = self.y[idx].detach().clone().to(torch.long)
         
         if self.transform:
             x1 = self.transform(x1)

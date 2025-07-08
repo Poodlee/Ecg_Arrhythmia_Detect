@@ -10,7 +10,7 @@
         "type": "mit_bih",
         "args":{
             "data_dir": "data/mit_bih",
-            "batch_size": 16,
+            "batch_size": 512,
             "shuffle": true,
             "validation_split": 0.1,
             "num_workers": 2
@@ -19,7 +19,7 @@
     "optimizer": {
         "type": "Adam",
         "args":{
-            "lr": 0.001,
+            "lr": 0.004,
             "weight_decay": 0,
             "amsgrad": true
         }
