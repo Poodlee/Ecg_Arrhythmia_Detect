@@ -1,4 +1,125 @@
 import torch
+import torch.nn.functional as F
+
+def accuracy_multiclass(preds_logits: torch.Tensor, labels_idx: torch.Tensor, num_classes: int) -> float:
+    """
+    Computes overall accuracy for multi-class classification.
+    Args:
+        preds_logits (torch.Tensor): Model raw logits, shape (B, C).
+        labels_idx (torch.Tensor): Ground truth class indices, shape (B,).
+    Returns:
+        float: Overall accuracy.
+    """
+    
+    predicted_labels = torch.argmax(preds_logits, dim=1) # Predicted Class index
+    correct = (predicted_labels == labels_idx).float()
+    return correct.mean().item()
+
+def calculate_confusion_components(
+    preds_logits: torch.Tensor,
+    labels_idx: torch.Tensor,
+    num_classes: int
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Computes True Positives (TP), False Positives (FP), and False Negatives (FN)
+    for each class in a multi-class classification problem.
+
+    Args:
+        preds_logits (torch.Tensor): Model raw logits, shape (B, C).
+        labels_idx (torch.Tensor): Ground truth class indices, shape (B,).
+        num_classes (int): Total number of classes.
+
+    Returns:
+        tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            - TP (torch.Tensor): True Positives for each class, shape (C,).
+            - FP (torch.Tensor): False Positives for each class, shape (C,).
+            - FN (torch.Tensor): False Negatives for each class, shape (C,).
+    """
+    # 1. Logits를 예측된 클래스 인덱스로 변환
+    predicted_labels = torch.argmax(preds_logits, dim=1)
+
+    # 2. 실제 라벨과 예측 라벨을 원-핫 인코딩으로 변환
+    # F.one_hot은 long 타입 입력을 기대합니다. labels_idx는 이미 long일 가능성이 높음.
+    labels_one_hot = F.one_hot(labels_idx, num_classes=num_classes).float()
+    preds_one_hot = F.one_hot(predicted_labels, num_classes=num_classes).float()
+
+    # 3. 각 클래스별 TP, FP, FN 계산
+    # TP: 실제도 1이고 예측도 1인 경우 (preds_one_hot * labels_one_hot)
+    TP = (preds_one_hot * labels_one_hot).sum(dim=0) # (C,)
+
+    # FP: 예측은 1인데 실제는 0인 경우 (preds_one_hot * (1 - labels_one_hot))
+    FP = (preds_one_hot * (1 - labels_one_hot)).sum(dim=0) # (C,)
+
+    # FN: 예측은 0인데 실제는 1인 경우 ((1 - preds_one_hot) * labels_one_hot)
+    FN = ((1 - preds_one_hot) * labels_one_hot).sum(dim=0) # (C,)
+
+    return TP, FP, FN
+
+# --- Sensitivity (Recall) - Macro Average ---
+def sensitivity_macro(preds_logits: torch.Tensor, labels_idx: torch.Tensor, num_classes: int) -> float:
+    """
+    Computes macro-averaged sensitivity (recall) for multi-class classification.
+
+    Args:
+        preds_logits (torch.Tensor): Model raw logits, shape (B, C).
+        labels_idx (torch.Tensor): Ground truth class indices, shape (B,).
+        num_classes (int): Total number of classes.
+
+    Returns:
+        float: Macro-averaged sensitivity.
+    """
+    TP, FP, FN = calculate_confusion_components(preds_logits, labels_idx, num_classes)
+    
+    # Calculate recall per class
+    # Add a small epsilon to avoid division by zero
+    recall_per_class = TP / (TP + FN + 1e-8)
+    
+    # Macro-averaged recall (mean of per-class recall)
+    return recall_per_class.mean().item()
+
+# --- Precision - Macro Average ---
+def precision_macro(preds_logits: torch.Tensor, labels_idx: torch.Tensor, num_classes: int) -> float:
+    """
+    Computes macro-averaged precision for multi-class classification.
+
+    Args:
+        preds_logits (torch.Tensor): Model raw logits, shape (B, C).
+        labels_idx (torch.Tensor): Ground truth class indices, shape (B,).
+        num_classes (int): Total number of classes.
+
+    Returns:
+        float: Macro-averaged precision.
+    """
+    TP, FP, FN = calculate_confusion_components(preds_logits, labels_idx, num_classes)
+    
+    # Calculate precision per class
+    prec_per_class = TP / (TP + FP + 1e-8)
+    
+    # Macro-averaged precision (mean of per-class precision)
+    return prec_per_class.mean().item()
+
+# --- F1-Score - Macro Average ---
+def f1_score_macro(preds_logits: torch.Tensor, labels_idx: torch.Tensor, num_classes: int) -> float:
+    """
+    Computes macro-averaged F1-score for multi-class classification.
+
+    Args:
+        preds_logits (torch.Tensor): Model raw logits, shape (B, C).
+        labels_idx (torch.Tensor): Ground truth class indices, shape (B,).
+        num_classes (int): Total number of classes.
+
+    Returns:
+        float: Macro-averaged F1-score.
+    """
+    # Calculate macro-averaged precision and recall using the functions above
+    prec = precision_macro(preds_logits, labels_idx, num_classes)
+    rec = sensitivity_macro(preds_logits, labels_idx, num_classes)
+    
+    # Calculate F1-score
+    if (prec + rec) == 0:
+        return 0.0
+    return 2 * (prec * rec) / (prec + rec)
+
 
 def accuracy(preds: torch.Tensor, labels: torch.Tensor, threshold: float = 0.3) -> float:
     """

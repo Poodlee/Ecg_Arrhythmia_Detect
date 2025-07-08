@@ -14,7 +14,10 @@ class BaseTrainer:
     """
     Base class for all trainers
     """
-    def __init__(self, model, criterion, metric_ftns, optimizer, config):
+    def __init__(self, model, criterion, metric_ftns, optimizer, config, time):
+        
+        self.time = time
+        
         self.config = config
         verbosity = config['trainer']['verbosity']
         assert verbosity in LOG_LEVELS, f"Invalid verbosity level: {verbosity}. Valid options: {list(LOG_LEVELS.keys())}"
@@ -139,12 +142,13 @@ class BaseTrainer:
             'monitor_best': self.mnt_best,
             'config': self.config
         }
-        os.makedirs(self.checkpoint_dir, exist_ok=True)
-        filename = os.path.join(self.checkpoint_dir, f'checkpoint-epoch{epoch}.pth')
+        save_dir = os.path.join(self.checkpoint_dir, self.time)
+        os.makedirs(save_dir, exist_ok=True)
+        filename = os.path.join(save_dir, f'checkpoint-epoch{epoch}.pth')
         torch.save(state, filename)
         self.logger.info("Saving checkpoint: {} ...".format(filename))
         if save_best:
-            best_path = os.path.join(self.checkpoint_dir, 'model_best.pth')
+            best_path = os.path.join(save_dir, 'model_best.pth')
 
             torch.save(state, best_path)
             self.logger.info("Saving current best: model_best.pth ...")

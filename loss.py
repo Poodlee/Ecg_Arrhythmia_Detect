@@ -20,6 +20,8 @@ class LossFactory:
     def get_loss(self):
         if self.loss_type == 'bce':
             return nn.BCEWithLogitsLoss(pos_weight=self.pos_weight)
+        elif self.loss_type == 'ce':
+            return nn.CrossEntropyLoss()
         elif self.loss_type == 'focal':
             return self.focal_loss
         elif self.loss_type == 'asymmetric':

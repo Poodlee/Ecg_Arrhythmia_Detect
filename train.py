@@ -7,6 +7,7 @@ from model import ModelFactory
 from loss import LossFactory
 import metric as module_metric
 from trainer import Trainer
+from datetime import datetime
 
 def set_random_seeds(seed=7):
     torch.manual_seed(seed)
@@ -49,7 +50,8 @@ def main(config):
         device=device,
         data_loader=data_loader,
         valid_data_loader=valid_data_loader,
-        lr_scheduler=lr_scheduler
+        lr_scheduler=lr_scheduler,
+        time = datetime.now().strftime('%Y%m%d-%H%M%S')
     )
     trainer.train()
 
@@ -59,12 +61,9 @@ if __name__ == '__main__':
     
     args = argparse.ArgumentParser(description='PyTorch Template')
     args.add_argument('-c', '--config', default='config.json', type=str,
-                      help='config file path (default: None)')
+                      help='config file path (default: config.json)')
     args.add_argument('-r', '--resume', default=None, type=str,
                       help='path to latest checkpoint (default: None)')
-    args.add_argument('-d', '--device', default="0", type=str,
-                      help='indices of GPUs to enable (default: all)')
-
     config_path = args.parse_args().config
     
     with open(config_path, 'r') as f:
