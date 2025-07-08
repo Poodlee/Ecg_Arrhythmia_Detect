@@ -42,11 +42,14 @@ class Trainer(BaseTrainer):
 
         self.train_metrics.reset()
         for batch_idx, (data, target) in enumerate(tqdm(self.data_loader, desc=f"Epoch {epoch} Batches", dynamic_ncols=True, leave=False)):
-            data, target = data.to(self.device), target.to(self.device)
+            data, target = {k: v.to(self.device) for k,v in data.items()}, target.to(self.device)
 
             self.optimizer.zero_grad()
-            output = self.model(data)
-            output = torch.softmax(output, dim=1) 
+            output = self.model(**data)
+            output = torch.softmax(output, dim=1)
+            num_classes = 3
+            target = torch.nn.functional.one_hot(target, num_classes=num_classes).float()
+
             loss = self.criterion(output, target)
             loss.backward()
             self.optimizer.step()
@@ -61,7 +64,7 @@ class Trainer(BaseTrainer):
                     epoch,
                     self._progress(batch_idx),
                     loss.item()))
-                self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
+                self.writer.add_image('input', make_grid(data['x1'].cpu(), nrow=8, normalize=True))
 
             if batch_idx == self.len_epoch:
                 break
@@ -88,9 +91,12 @@ class Trainer(BaseTrainer):
         self.valid_metrics.reset()
         with torch.no_grad():
             for batch_idx, (data, target) in enumerate(self.valid_data_loader):
-                data, target = data.to(self.device), target.to(self.device)
+                data, target = {k: v.to(self.device) for k,v in data.items()}, target.to(self.device)
 
-                output = self.model(data)
+                output = self.model(**data)
+                num_classes = 3
+                target = torch.nn.functional.one_hot(target, num_classes=num_classes).float()
+
                 output = torch.softmax(output, dim=1) 
                 loss = self.criterion(output, target)
 
@@ -98,10 +104,10 @@ class Trainer(BaseTrainer):
                 self.valid_metrics.update('loss', loss.item())
                 for met in self.metric_ftns:
                     self.valid_metrics.update(met.__name__, met(output, target))
-                self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
+                self.writer.add_image('input', make_grid(data['x1'].cpu(), nrow=8, normalize=True))
 
         # add histogram of model parameters to the tensorboard
-        for name, p in self.model.named_parameters():
+        for name, p in self.model.named_parameters(): 
             self.writer.add_histogram(name, p)
         return self.valid_metrics.result()
 

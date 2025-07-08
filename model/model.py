@@ -204,3 +204,48 @@ def convnextv2_huge(**kwargs):
     model = ConvNeXtV2(depths=[3, 3, 27, 3], dims=[352, 704, 1408, 2816], **kwargs)
     return model
     
+class FivePapers(nn.Module):
+    def __init__(self):
+        super(FivePapers, self).__init__()        
+        self.conv1 = nn.Conv2d(3, 32, (5, 5))
+        self.conv2 = nn.Conv2d(32, 64, (5, 5))
+        self.conv3 = nn.Conv2d(64, 128, (3, 3))
+        self.bn1 = nn.BatchNorm2d(32)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.bn3 = nn.BatchNorm2d(128)
+        self.pooling1 = nn.MaxPool2d(5)
+        self.pooling2 = nn.MaxPool2d(3)
+        self.pooling3 = nn.AdaptiveMaxPool2d((1, 1))
+        self.fc0 = nn.Linear(128,128)
+        self.fc1 = nn.Linear(4,128)    
+        self.fc11 = nn.Linear(256,64)
+        self.fc2 = nn.Linear(64, 3)
+
+        # Weight initialization
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0.0)
+        
+    def extract_features(self,x1):
+        x1 = F.relu(self.bn1(self.conv1(x1)))
+        x1 = self.pooling1(x1)
+        x1 = F.relu(self.bn2(self.conv2(x1)))
+        x1 = self.pooling2(x1)
+        x1 = F.relu(self.bn3(self.conv3(x1)))
+        x1 = self.pooling3(x1)
+        x1 = x1.view((-1, 128))   
+        return x1
+
+    def forward(self, **kwarg):
+        x2 = kwarg['x2']
+        x1 = kwarg['x1']
+                  
+        x1 = self.extract_features(x1)
+        x1 = F.relu(self.fc0(x1))
+        x2 = F.relu(self.fc1(x2))        
+        x = torch.cat((x1, x2), dim=1)                      
+        x = F.relu(self.fc11(x))
+        x = self.fc2(x)
+        return x

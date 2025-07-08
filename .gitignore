@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# Weights
+*.pt
+
 # Distribution / packaging
 .Python
 env/
@@ -89,6 +92,9 @@ celerybeat-schedule
 .venv
 venv/
 ENV/
+
+# image
+images/
 
 # Spyder project settings
 .spyderproject
