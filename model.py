@@ -205,7 +205,7 @@ def convnextv2_huge(**kwargs):
     return model
     
 class FivePapers(nn.Module):
-    def __init__(self, L=128):
+    def __init__(self, L=4):
         super(FivePapers, self).__init__()        
         self.conv1 = nn.Conv2d(3, 32, (5, 5))
         self.conv2 = nn.Conv2d(32, 64, (5, 5))
