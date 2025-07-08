@@ -202,8 +202,7 @@ import pywt
 import cv2
 import torch
 import os
-def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train): 
-    before, after = 90, 100 # MIT
+def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train, before, after): 
     
     wavelet = "gaus4"  # mexh, morl, gaus8, gaus4
     scales = pywt.central_frequency(wavelet) * sampling_rate / np.arange(1, 80, 1)    

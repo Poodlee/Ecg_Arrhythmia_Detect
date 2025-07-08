@@ -4,7 +4,7 @@ import torch
 import os
 
 class WandbWriter:
-    def __init__(self, log_dir, logger, config, project_name="TMAT Model Test"):
+    def __init__(self, log_dir, logger, config, project_name="TMAT Model Test(INCART)"):
         """
         WandbWriter for logging metrics, images, and models to Weights & Biases.
         
