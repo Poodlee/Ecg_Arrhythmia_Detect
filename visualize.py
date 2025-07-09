@@ -4,9 +4,6 @@ import numpy as np
 # Gradient-weighted Class Activation Mapping
 class GradCam:
     def __init__(self, network, target_layer):
-        """
-        Initialize Grad-CAM with the skorch NeuralNetClassifier and the target layer.
-        """
         self.net = network
         self.target_layer = target_layer
         self.gradients = None
@@ -28,35 +25,29 @@ class GradCam:
         """
         self.gradients = grad_output[0]
 
-    def generate_heatmap(self, x, class_idx=None):
+    def generate_heatmap(self, x, class_idx=None, sample_idx=0):
         """
         Generate Grad-CAM heatmap.
         """
         self.net.zero_grad()  # Reset gradients on the underlying PyTorch model
-        output = self.net(**x)  # Pass input through the PyTorch model
+        output = self.net(**x)  # Extract feature map 
 
         if class_idx is None:
-            class_idx = torch.argmax(output)
+            class_idx = torch.argmax(output[sample_idx]) # First sample's class index
 
         # Backpropagate to get gradients
-        class_score = output[:, class_idx][0]
-        class_score.backward()
+        class_score = output[sample_idx, class_idx]
+        class_score.backward(retain_graph=True) # Extract gradient
 
         # Compute Grad-CAM
-        gradients = self.gradients.detach()
-        feature_maps = self.feature_maps.detach()
-        weights = torch.mean(gradients, dim=(2, 3), keepdim=True)
-                
-        cam = torch.sum(weights * feature_maps, dim=1).squeeze() 
+        gradients = self.gradients[sample_idx].detach()  # shape: (C, H, W)
+        feature_maps = self.feature_maps[sample_idx].detach()  # shape: (C, H, W)
         
-        if F.relu(cam).sum()!=0:
-            cam = F.relu(cam)  # Apply ReLU to focus on positive contributions 
-        else:
-            cam = 1-cam
-        #plt.imshow(cam.to('cpu'))
+        weights = torch.mean(gradients, dim=(1, 2), keepdim=True)        
+        cam = torch.sum(weights * feature_maps, dim=0) 
         
-        # Normalize heatmap        
-        cam = (cam - cam.min()) / (cam.max() - cam.min())
+        cam = F.relu(cam) if F.relu(cam).sum() != 0 else 1 - cam
+        cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)  # Normalize
         return cam
 
     @staticmethod
@@ -65,31 +56,31 @@ class GradCam:
         Overlay the Grad-CAM heatmap on the original image.
         """
         import cv2
-    
-        # Convert heatmap to numpy array
-        heatmap = heatmap.cpu().numpy()        
+        print(f"[DEBUG] Original image shape (after squeeze): {image.shape}")
+        print(f"[DEBUG] Heatmap shape: {heatmap.shape}")
+
         image = image.squeeze().cpu().numpy()  
-        # Resize heatmap to match the input image dimensions
-        #heatmap_resized = cv2.resize(heatmap, (image.shape[2], image.shape[1]))  # Resize to (H, W)
-        heatmap_resized = cv2.resize(heatmap, (120, 120))  # Resize to (H, W)                
-        heatmap_resized = np.uint8(255 * heatmap_resized)
-        heatmap_resized = np.where(heatmap_resized>100,heatmap_resized,heatmap_resized-10)
-        
-        #heatmap_colored = cv2.applyColorMap(heatmap_resized, cv2.COLORMAP_JET)  # Apply a colormap
-        
-        a, b = image.min(), image.max()        
-        #heatmap_resized = normalize_tensor(heatmap_resized, a, b)                        
-        # Normalize and convert image to range 0-255
-        if len(image.shape) == 2:  # If grayscale
-            #print('GRAYSCALE')
-            image = np.uint8(255 * (image - image.min()) / (image.max() - image.min()))
-            #image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)  # Convert to 3-channel (BGR)
-        else:  # If RGB or multi-channel
-            image = np.uint8(255 * (image - image.min()) / (image.max() - image.min()))
     
+        # Normalize image to [0, 255]
+        image = (image - image.min()) / (image.max() - image.min() + 1e-8)
+        image = np.uint8(255 * image)
+        
+        heatmap = heatmap.cpu().numpy()        
+            
+        # Resize heatmap to match image size
+        heatmap_resized = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
+        heatmap_resized = np.uint8(255 * heatmap_resized)
+
+        # Apply color map
+        heatmap_colored = cv2.applyColorMap(heatmap_resized, cv2.COLORMAP_JET)
+                              
+        # Convert grayscale image to 3-channel if needed
+        if len(image.shape) == 2:
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        
+        print(f"[DEBUG] Final image shape: {image.shape}")
+        print(f"[DEBUG] Final heatmap_colored shape: {heatmap_colored.shape}")
+
         # Blend the heatmap with the original image
-                    
-        #plt.imshow(heatmap_colored)
-        #overlayed = cv2.addWeighted(image, 1 - alpha, heatmap_colored, alpha, 0)       
-        # image = np.transpose(image, (0,2,3,1))         
-        return image[0] + heatmap_resized*alpha
+        overlayed = cv2.addWeighted(image, 1 - alpha, heatmap_colored, alpha, 0)       
+        return overlayed

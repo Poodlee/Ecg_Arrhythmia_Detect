@@ -149,14 +149,16 @@ def main(config):
     #####################
     # === GRAD  CAM === #
     #####################
+    sample_idx = 0
+    
     sample_data, _ = next(iter(data_loader))
     sample = {k: v.to(device) for k,v in sample_data.items()}
     target_layer = model.conv3 if hasattr(model, 'conv3') else list(model.children())[-1]
     gradcam = GradCam(model, target_layer)
-    heatmap = gradcam.generate_heatmap(sample, class_idx=int(all_preds[0]))
-    overlay = GradCam.overlay_heatmap(sample['x1'], heatmap[0])
+    heatmap = gradcam.generate_heatmap(sample, sample_idx=sample_idx)
+    overlay = GradCam.overlay_heatmap(sample['x1'], heatmap)
     plt.figure(figsize=(8,4))
-    plt.subplot(1,2,1); plt.title("Original"); plt.imshow(sample['x1'][0].cpu().squeeze().permute(1,2,0), cmap='gray'); plt.axis('off')
+    plt.subplot(1,2,1); plt.title("Original"); plt.imshow(sample['x1'][sample_idx].cpu().squeeze().permute(1,2,0), cmap='gray'); plt.axis('off')
     plt.subplot(1,2,2); plt.title("Grad-CAM"); plt.imshow(overlay.transpose(1,2,0), cmap='jet'); plt.axis('off')
     plt.savefig(os.path.join(config['output_dir'], f'gradcam_sample_{time}.png'), dpi=300, bbox_inches='tight')
 
