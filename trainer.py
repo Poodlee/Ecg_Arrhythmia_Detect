@@ -30,7 +30,7 @@ class Trainer(BaseTrainer):
         self.log_step = int(np.sqrt(data_loader.batch_size))
 
         self.train_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
-        self.valid_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
+        self.valid_metrics = MetricTracker('val_loss', *[f'val_{m.__name__}' for m in self.metric_ftns], writer=self.writer)
 
     def _train_epoch(self, epoch):
         """
@@ -68,7 +68,7 @@ class Trainer(BaseTrainer):
         if self.do_validation:
             val_log = self._valid_epoch(epoch)
             log.update(**{'val_'+k : v for k, v in val_log.items()})
-
+            print(f'val_log is {val_log}')
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
         return log
@@ -91,10 +91,10 @@ class Trainer(BaseTrainer):
                 loss = self.criterion(output, target)
 
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
-                self.valid_metrics.update('loss', loss.item())
+                self.valid_metrics.update('val_loss', loss.item())
                 num_classes = 3
                 for met in self.metric_ftns:
-                    self.valid_metrics.update(met.__name__, met(output, target, num_classes))
+                    self.valid_metrics.update(f'val_{met.__name__}', met(output, target, num_classes))
                 self.writer.add_image('input', make_grid(data['x1'].cpu(), nrow=8, normalize=True))
 
         return self.valid_metrics.result()

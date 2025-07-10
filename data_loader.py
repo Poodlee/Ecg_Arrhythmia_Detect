@@ -72,7 +72,6 @@ class Mit_bihDataset(Dataset):
             std[std == 0] = 1.0  
             x2_scaled = (x2_np - mean) / std
             self.x2 = torch.tensor(x2_scaled, dtype=torch.float32)
-            
             self.y = torch.LongTensor(split_infos['y'])
             
         else:
@@ -88,7 +87,10 @@ class Mit_bihDataset(Dataset):
             self.x1, self.x2, self.y = getXY(
                 scaled_signals, r_peak_list, ann_list, database='mit_bih', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after
             )
-            
+            self.x1 = torch.tensor(self.x1, dtype=torch.float32) if not isinstance(self.x1, torch.Tensor) else self.x1.to(torch.float32)
+            self.x2 = torch.tensor(self.x2, dtype=torch.float32) if not isinstance(self.x2, torch.Tensor) else self.x2.to(torch.float32)
+            self.y = torch.tensor(self.y, dtype=torch.long) if not isinstance(self.y, torch.Tensor) else y.to(torch.long)
+
             # 데이터 저장
             torch.save({
                 'x1': self.x1,
@@ -103,16 +105,8 @@ class Mit_bihDataset(Dataset):
         path_x1 = self.x1[idx]
         x1 = torch.load(path_x1) 
         
-        if isinstance(self.x2[idx], np.ndarray):
-            x2 = torch.from_numpy(self.x2[idx]).to(torch.float32)
-        if isinstance(self.y[idx], np.ndarray):
-            y = torch.from_numpy(self.y[idx]).to(torch.long)
-    
-        if isinstance(self.x2[idx], torch.Tensor):
-            x2 = self.x2[idx].detach().clone().to(torch.float32)
-        if isinstance(self.y[idx], torch.Tensor):
-            y = self.y[idx].detach().clone().to(torch.long)
-        
+        x2 = self.x2[idx].detach().clone()
+        y = self.y[idx].detach().clone()
         
         if self.transform:
             x1 = self.transform(x1)
@@ -157,7 +151,6 @@ class IncartDataset(Dataset):
             std[std == 0] = 1.0  
             x2_scaled = (x2_np - mean) / std
             self.x2 = torch.tensor(x2_scaled, dtype=torch.float32)
-            
             self.y = torch.LongTensor(split_infos['y'])
             
         else:
@@ -175,6 +168,11 @@ class IncartDataset(Dataset):
                 scaled_signals, r_peak_list, ann_list, database='incart', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after
             )
             
+            self.x1 = torch.tensor(self.x1, dtype=torch.float32) if not isinstance(self.x1, torch.Tensor) else self.x1.to(torch.float32)
+            self.x2 = torch.tensor(self.x2, dtype=torch.float32) if not isinstance(self.x2, torch.Tensor) else self.x2.to(torch.float32)
+            self.y = torch.tensor(self.y, dtype=torch.long) if not isinstance(self.y, torch.Tensor) else y.to(torch.long)
+
+            
             # 데이터 저장
             torch.save({
                 'x1': self.x1,
@@ -189,16 +187,8 @@ class IncartDataset(Dataset):
         path_x1 = self.x1[idx]
         x1 = torch.load(path_x1) 
         
-        if isinstance(self.x2[idx], np.ndarray):
-            x2 = torch.from_numpy(self.x2[idx]).to(torch.float32)
-        if isinstance(self.y[idx], np.ndarray):
-            y = torch.from_numpy(self.y[idx]).to(torch.long)
-    
-        if isinstance(self.x2[idx], torch.Tensor):
-            x2 = self.x2[idx].detach().clone().to(torch.float32)
-        if isinstance(self.y[idx], torch.Tensor):
-            y = self.y[idx].detach().clone().to(torch.long)
-        
+        x2 = self.x2[idx].detach().clone()
+        y = self.y[idx].detach().clone()
         
         if self.transform:
             x1 = self.transform(x1)
@@ -268,7 +258,11 @@ class EuropeansttDataset(Dataset):
             before, after = 62, 70
             
             # 특징 추출 및 데이터 준비
-            self.x1, self.x2, self.y = getXY(scaled_signals1_stt, r_peak_list1_stt, ann_list1_stt, 'stt',250, True)
+            self.x1, self.x2, self.y = getXY(scaled_signals1_stt, r_peak_list1_stt, ann_list1_stt, 'stt',250, True, before=before, after=after)
+            
+            self.x1 = torch.tensor(self.x1, dtype=torch.float32) if not isinstance(self.x1, torch.Tensor) else self.x1.to(torch.float32)
+            self.x2 = torch.tensor(self.x2, dtype=torch.float32) if not isinstance(self.x2, torch.Tensor) else self.x2.to(torch.float32)
+            self.y = torch.tensor(self.y, dtype=torch.long) if not isinstance(self.y, torch.Tensor) else self.y.to(torch.long)
             
             # 데이터 저장
             torch.save({
@@ -284,16 +278,8 @@ class EuropeansttDataset(Dataset):
         path_x1 = self.x1[idx]
         x1 = torch.load(path_x1) 
         
-        if isinstance(self.x2[idx], np.ndarray):
-            x2 = torch.from_numpy(self.x2[idx]).to(torch.float32)
-        if isinstance(self.y[idx], np.ndarray):
-            y = torch.from_numpy(self.y[idx]).to(torch.long)
-    
-        if isinstance(self.x2[idx], torch.Tensor):
-            x2 = self.x2[idx].detach().clone().to(torch.float32)
-        if isinstance(self.y[idx], torch.Tensor):
-            y = self.y[idx].detach().clone().to(torch.long)
-        
+        x2 = self.x2[idx].detach().clone()
+        y = self.y[idx].detach().clone()
         
         if self.transform:
             x1 = self.transform(x1)
