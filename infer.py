@@ -98,13 +98,9 @@ def main(config):
     # Get ACC and F1-score from log
     acc = log.get('accuracy_multiclass', None)
     f1 = log.get('f1_score_macro', None)
+    sensitivity = log.get('sensitivity_macro', None)
     title_str = 'Confusion Matrix: Inference'
-    if acc is not None and f1 is not None:
-        title_str += f' (ACC={acc:.3f}, F1={f1:.3f})'
-    elif acc is not None:
-        title_str += f' (ACC={acc:.3f})'
-    elif f1 is not None:
-        title_str += f' (F1={f1:.3f})'
+    title_str += f' (ACC={acc:.3f}, F1={f1:.3f}), Recall={sensitivity:.3f}'
 
     fig, ax = plt.subplots(figsize=(6,5))
     sns.heatmap(cf_matrix,

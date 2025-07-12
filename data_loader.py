@@ -5,16 +5,38 @@ import os
 import numpy as np
 import torch
 import cv2
-
+from scipy.signal import butter, filtfilt
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from ecg_pipeline import bandpass_filter, stockwell_transform, standardize_signal
 from PIL import Image
 from ecg_pipeline import prepare_scaled_records, getXY
 
+def add_noise(x, sampling_rate):
+    noise = 0.0
+    if np.random.rand() < 0.5:
+        amplitude = 0.05
+        noise_type = np.random.choice(['white', 'high', 'low'])
+        if noise_type == 'white':
+            noise = np.random.normal(0, 1, size=x.shape)
+            noise = noise / np.max(np.abs(noise)) * amplitude
+        elif noise_type == 'high':
+            # 20~40Hz bandpass noise
+            noise = np.random.normal(0, 1, size=x.shape)
+            b, a = butter(N=2, Wn=[20, 40], btype='bandpass', fs=sampling_rate)
+            noise = filtfilt(b, a, noise)
+            noise = noise / np.max(np.abs(noise)) * amplitude
+
+        elif noise_type == 'low':
+            # 0.1~0.5Hz bandpass noise (baseline wander simulation)
+            noise = np.random.normal(0, 1, size=x.shape)
+            b, a = butter(N=2, Wn=[0.1, 0.5], btype='bandpass', fs=sampling_rate)
+            noise = filtfilt(b, a, noise)
+            noise = noise / np.max(np.abs(noise)) * amplitude
+    return noise
+
 class DataLoaderFactory:
     _dataloader_map = {
-        'mnist': 'MnistDataLoader',
         'mit_bih': 'Mit_bihDataLoader',
         'incart': 'IncartDataLoader',
         'european_stt': 'EuropeansttDataLoader'
@@ -87,16 +109,14 @@ class Mit_bihDataset(Dataset):
             self.x1, self.x2, self.y = getXY(
                 scaled_signals, r_peak_list, ann_list, database='mit_bih', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after
             )
-            self.x1 = torch.tensor(self.x1, dtype=torch.float32) if not isinstance(self.x1, torch.Tensor) else self.x1.to(torch.float32)
-            self.x2 = torch.tensor(self.x2, dtype=torch.float32) if not isinstance(self.x2, torch.Tensor) else self.x2.to(torch.float32)
-            self.y = torch.tensor(self.y, dtype=torch.long) if not isinstance(self.y, torch.Tensor) else y.to(torch.long)
-
             # 데이터 저장
             torch.save({
                 'x1': self.x1,
                 'x2': self.x2,
                 'y': self.y
             }, self.data_file)
+    
+
         
     def __len__(self):
         return len(self.y)
@@ -105,11 +125,19 @@ class Mit_bihDataset(Dataset):
         path_x1 = self.x1[idx]
         x1 = torch.load(path_x1) 
         
-        x2 = self.x2[idx].detach().clone()
-        y = self.y[idx].detach().clone()
+        x2 = self.x2[idx]
+        if isinstance(x2, np.ndarray):
+            x2 = torch.tensor(x2, dtype=torch.float32)
+            x2 = x2.detach().clone()
+        y = self.y[idx]
         
         if self.transform:
             x1 = self.transform(x1)
+            
+        if self.split == 'train':
+            noise = add_noise(x1.cpu().numpy(), self.fs)
+            noise = torch.tensor(noise, dtype=torch.float32).to(x1.device) 
+            x1 = x1 + noise
         
         return {'x1': x1,'x2': x2}, y
 
@@ -125,7 +153,7 @@ class IncartDataset(Dataset):
         self.fs = fs
         self.transform = transform
         
-        # MIT-BIH 데이터셋의 레코드 목록
+        # INCART 데이터셋의 레코드 목록
         records_incart_train = ['I03', 'I04',  'I05', 'I08', 'I09', 'I10', 'I11', 'I12', 'I13', 'I14', 'I16', 'I17', 'I18', 'I19', 'I25', 'I26', 'I27', 'I28', 'I33', 'I34', 'I35', 'I36', 'I37', 'I44', 'I45', 'I46', 'I47', 'I48', 'I54', 'I55', 'I56', 'I68', 'I69', 'I70', 'I71', 'I72', 'I73', 'I74', 'I75', 'I42', 'I43', 'I62', 'I63', 'I64', 'I06', 'I07']
         records_incart_test =  ['I01', 'I02', 'I15', 'I20', 'I21', 'I22', 'I23', 'I24', 'I29', 'I30', 'I31', 'I32', 'I38', 'I39', 'I40', 'I41', 'I49', 'I50', 'I51', 'I52', 'I53', 'I57', 'I58', 'I59', 'I60', 'I61', 'I65', 'I66', 'I67']
         
@@ -168,11 +196,6 @@ class IncartDataset(Dataset):
                 scaled_signals, r_peak_list, ann_list, database='incart', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after
             )
             
-            self.x1 = torch.tensor(self.x1, dtype=torch.float32) if not isinstance(self.x1, torch.Tensor) else self.x1.to(torch.float32)
-            self.x2 = torch.tensor(self.x2, dtype=torch.float32) if not isinstance(self.x2, torch.Tensor) else self.x2.to(torch.float32)
-            self.y = torch.tensor(self.y, dtype=torch.long) if not isinstance(self.y, torch.Tensor) else y.to(torch.long)
-
-            
             # 데이터 저장
             torch.save({
                 'x1': self.x1,
@@ -187,11 +210,19 @@ class IncartDataset(Dataset):
         path_x1 = self.x1[idx]
         x1 = torch.load(path_x1) 
         
-        x2 = self.x2[idx].detach().clone()
-        y = self.y[idx].detach().clone()
+        x2 = self.x2[idx]
+        if isinstance(x2, np.ndarray):
+            x2 = torch.tensor(x2, dtype=torch.float32)
+            x2 = x2.detach().clone()
+        y = self.y[idx]
         
         if self.transform:
             x1 = self.transform(x1)
+            
+        if self.split == 'train':
+            noise = add_noise(x1.cpu().numpy(), self.fs)
+            noise = torch.tensor(noise, dtype=torch.float32).to(x1.device) 
+            x1 = x1 + noise
         
         return {'x1': x1,'x2': x2}, y
 
@@ -208,7 +239,7 @@ class EuropeansttDataset(Dataset):
         self.fs = fs
         self.transform = transform
         
-        # MIT-BIH 데이터셋의 레코드 목록
+        # European 데이터셋의 레코드 목록
         records_incart_train = ['I03', 'I04',  'I05', 'I08', 'I09', 'I10', 'I11', 'I12', 'I13', 'I14', 'I16', 'I17', 'I18', 'I19', 'I25', 'I26', 'I27', 'I28', 'I33', 'I34', 'I35', 'I36', 'I37', 'I44', 'I45', 'I46', 'I47', 'I48', 'I54', 'I55', 'I56', 'I68', 'I69', 'I70', 'I71', 'I72', 'I73', 'I74', 'I75', 'I42', 'I43', 'I62', 'I63', 'I64', 'I06', 'I07']
         records_incart_test =  ['I01', 'I02', 'I15', 'I20', 'I21', 'I22', 'I23', 'I24', 'I29', 'I30', 'I31', 'I32', 'I38', 'I39', 'I40', 'I41', 'I49', 'I50', 'I51', 'I52', 'I53', 'I57', 'I58', 'I59', 'I60', 'I61', 'I65', 'I66', 'I67']
         
@@ -260,10 +291,6 @@ class EuropeansttDataset(Dataset):
             # 특징 추출 및 데이터 준비
             self.x1, self.x2, self.y = getXY(scaled_signals1_stt, r_peak_list1_stt, ann_list1_stt, 'stt',250, True, before=before, after=after)
             
-            self.x1 = torch.tensor(self.x1, dtype=torch.float32) if not isinstance(self.x1, torch.Tensor) else self.x1.to(torch.float32)
-            self.x2 = torch.tensor(self.x2, dtype=torch.float32) if not isinstance(self.x2, torch.Tensor) else self.x2.to(torch.float32)
-            self.y = torch.tensor(self.y, dtype=torch.long) if not isinstance(self.y, torch.Tensor) else self.y.to(torch.long)
-            
             # 데이터 저장
             torch.save({
                 'x1': self.x1,
@@ -278,10 +305,18 @@ class EuropeansttDataset(Dataset):
         path_x1 = self.x1[idx]
         x1 = torch.load(path_x1) 
         
-        x2 = self.x2[idx].detach().clone()
-        y = self.y[idx].detach().clone()
+        x2 = self.x2[idx]
+        if isinstance(x2, np.ndarray):
+            x2 = torch.tensor(x2, dtype=torch.float32)
+            x2 = x2.detach().clone()
+        y = self.y[idx]
         
         if self.transform:
             x1 = self.transform(x1)
+            
+        if self.split == 'train':
+            noise = add_noise(x1.cpu().numpy(), self.fs)
+            noise = torch.tensor(noise, dtype=torch.float32).to(x1.device) 
+            x1 = x1 + noise
         
         return {'x1': x1,'x2': x2}, y

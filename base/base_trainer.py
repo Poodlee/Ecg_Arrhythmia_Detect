@@ -150,7 +150,7 @@ class BaseTrainer:
         torch.save(state, filename)
         self.logger.info("Saving checkpoint: {} ...".format(filename))
         if save_best:
-            best_path = os.path.join(save_dir, 'model_best(epoch{epoch}).pth')
+            best_path = os.path.join(save_dir, f'model_best(epoch{epoch}).pth')
 
             torch.save(state, best_path)
             self.logger.info("Saving current best: model_best.pth ...")

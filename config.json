@@ -7,9 +7,9 @@
         "args": {}
     },
     "data_loader": {
-        "type": "mit_bih",
+        "type": "incart",
         "args":{
-            "data_dir": "data/mit_bih",
+            "data_dir": "data/incart/files",
             "batch_size": 512,
             "shuffle": true,
             "validation_split": 0.1,
@@ -42,13 +42,13 @@
         }
     },
     "trainer": {
-        "epochs": 15,
+        "epochs": 20,
 
         "save_dir": "saved/",
         "save_period": 1,
         "verbosity": 2,
         
         "monitor": "max sensitivity_macro",
-        "early_stop": 10
+        "early_stop": 4
     }
 }

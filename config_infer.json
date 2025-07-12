@@ -2,7 +2,7 @@
     "name": "Test Setting",
     "n_gpu": 1,
     "gpu": "cuda:0",
-    "resume": "saved/20250708-150321/model_best.pth",
+    "resume": "saved/incart/20250712-185230/model_best(epoch10).pth",
     "output_dir": "outputs/",
     "arch": {
         "type": "pmat",

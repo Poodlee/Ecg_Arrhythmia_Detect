@@ -7,6 +7,7 @@ import scipy.signal as sg
 import wfdb
 from scipy.stats import skew, kurtosis, median_abs_deviation, skewtest, kurtosistest, fligner, shapiro, power_divergence, tmean
 from scipy.signal import welch, periodogram
+
 import pywt
 import cv2
 import torch
@@ -152,9 +153,8 @@ def prepare_scaled_records(records, database, sampling_rate, path_str):
         baseline = sg.medfilt(sg.medfilt(ecg, int(0.2 * sampling_rate) - 1), int(0.6 * sampling_rate) - 1)
         
         filtered_signal = ecg - baseline
-        
-        
-        scaled_signal = filtered_signal        
+                
+        scaled_signal = filtered_signal   
         scaled_signals.append(scaled_signal)
         
         # align r-peaks
