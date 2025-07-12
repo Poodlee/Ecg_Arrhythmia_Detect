@@ -92,9 +92,19 @@ def main(config):
     N = len(classes_)
 
     group_counts = ['{0:0.0f}'.format(value) for value in cf_matrix.flatten()]
-    group_percentages = ['{0:.2%}'.format(cf_matrix.flatten()[i]/np.sum(cf_matrix[int(i/N)])) for i in range(N*N)]
-    labels_ = [f'{x}\n{y}' for x, y in zip(group_counts, group_percentages)]
+    labels_ = [f'{x}' for x in group_counts]
     labels_ = np.asarray(labels_).reshape(N, N)
+
+    # Get ACC and F1-score from log
+    acc = log.get('accuracy_multiclass', None)
+    f1 = log.get('f1_score_macro', None)
+    title_str = 'Confusion Matrix: Inference'
+    if acc is not None and f1 is not None:
+        title_str += f' (ACC={acc:.3f}, F1={f1:.3f})'
+    elif acc is not None:
+        title_str += f' (ACC={acc:.3f})'
+    elif f1 is not None:
+        title_str += f' (F1={f1:.3f})'
 
     fig, ax = plt.subplots(figsize=(6,5))
     sns.heatmap(cf_matrix,
@@ -108,7 +118,11 @@ def main(config):
                 annot_kws={"weight": "bold"},
                 xticklabels=classes_,
                 yticklabels=classes_
-    ).set(title='Confusion Matrix: Inference')
+    )
+
+    ax.set_xlabel("Prediction", fontsize=12, weight="bold")
+    ax.set_ylabel("Label", fontsize=12, weight="bold")
+    ax.set_title(title_str, fontsize=13, weight="bold")
 
     # Save heatmap
     time = datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -156,7 +170,7 @@ def main(config):
     target_layer = model.conv3 if hasattr(model, 'conv3') else list(model.children())[-1]
     gradcam = GradCam(model, target_layer)
     heatmap = gradcam.generate_heatmap(sample, sample_idx=sample_idx)
-    overlay = GradCam.overlay_heatmap(sample['x1'], heatmap)
+    overlay = GradCam.overlay_heatmap(sample['x1'], heatmap, sample_idx=sample_idx)
     plt.figure(figsize=(8,4))
     plt.subplot(1,2,1); plt.title("Original"); plt.imshow(sample['x1'][sample_idx].cpu().squeeze().permute(1,2,0), cmap='gray'); plt.axis('off')
     plt.subplot(1,2,2); plt.title("Grad-CAM"); plt.imshow(overlay.transpose(1,2,0), cmap='jet'); plt.axis('off')

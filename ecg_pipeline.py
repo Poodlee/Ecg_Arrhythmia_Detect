@@ -3,6 +3,15 @@ from scipy import signal
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 
+import scipy.signal as sg
+import wfdb
+from scipy.stats import skew, kurtosis, median_abs_deviation, skewtest, kurtosistest, fligner, shapiro, power_divergence, tmean
+from scipy.signal import welch, periodogram
+import pywt
+import cv2
+import torch
+import os
+
 # ECG signal pre-processing (denoising, standardization, feature extraction, etc.)
 
 def bandpass_filter(signal_array, fs, lowcut=0.5, highcut=40, order=4):
@@ -122,8 +131,6 @@ PhysioBank = {
         "F": 3,  # F
         "/": 4, # Peaced beats        
 }
-import scipy.signal as sg
-import wfdb
 
 def prepare_scaled_records(records, database, sampling_rate, path_str):
     scaled_signals = []
@@ -163,17 +170,22 @@ def prepare_scaled_records(records, database, sampling_rate, path_str):
     return scaled_signals, r_peak_list, ann_list
 
 def get_peaks_ecg(ecg, rpeak, rr_avg, rr_next, sampling_rate):    
-    b1 = min(rpeak + int(sampling_rate*0.026), len(ecg)-1)
-    b2 = max(0, rpeak-int(sampling_rate*0.026))
-
-    sp = ecg[rpeak:b1].argmin()    
-    speak = rpeak + sp
-    speak = rpeak if speak>=len(ecg) else speak
+    """
+    Identifies P, Q, R, S and T peak positions around a given R-peak.
+    """
     
+    # Define a short window (26ms) to search for Q and S peaks near the R peak.
+    # S-peak
+    b1 = min(rpeak + int(sampling_rate*0.026), len(ecg)-1)
+    sp = ecg[rpeak:b1].argmin()    
+    speak = rpeak + sp if rpeak + sp < len(ecg) else rpeak
+    # Q-peak
+    b2 = max(0, rpeak-int(sampling_rate*0.026))
     qp = ecg[b2:rpeak].argmin() if b2<rpeak else rpeak
     qpeak = rpeak-int(sampling_rate*0.026)+qp
     qpeak = 0 if qpeak<0 else qpeak
 
+    # P-peak: typically a small positive deflection before the QRS complex. 
     p_start = max(0, qpeak - int(rr_avg/4))    
     p_end = qpeak
     if p_start == p_end:
@@ -190,18 +202,14 @@ def get_peaks_ecg(ecg, rpeak, rr_avg, rr_next, sampling_rate):
         if len(ecg[p_start:p_end])==0:
             pass
             #print(p_start,p_end,rpeak)
-        
-    t_start = speak + int(sampling_rate*0.166) # 0.166 ms    
+    
+    # T-peak
+    t_start = speak + int(sampling_rate*0.166) # 166 ms    
     t_end = min(rpeak + int((rr_next)/2), len(ecg))
     tpeak = t_start + ecg[t_start:t_end].argmax() if t_start<t_end else t_start
     tpeak = tpeak if tpeak < len(ecg) else rpeak
     return ppeak, qpeak, rpeak, speak, tpeak
-from scipy.stats import skew, kurtosis, median_abs_deviation, skewtest, kurtosistest, fligner, shapiro, power_divergence, tmean
-from scipy.signal import welch, periodogram
-import pywt
-import cv2
-import torch
-import os
+
 def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train, before, after): 
     
     wavelet = "gaus4"  # mexh, morl, gaus8, gaus4
@@ -240,6 +248,7 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
         # For dynamic permutating beteween heatbeats
         m_current = []
 
+        # Per beats
         for k in range(len(r_peaks)):
             #skipp 1st and last rpeak
             if k==0 or k == len(r_peaks)-1:

@@ -14,7 +14,7 @@ class BaseTrainer:
     """
     Base class for all trainers
     """
-    def __init__(self, model, criterion, metric_ftns, optimizer, config, time):
+    def __init__(self, model, criterion, metric_ftns, optimizer, config, time, data_type):
         
         self.time = time
         
@@ -36,6 +36,8 @@ class BaseTrainer:
         self.save_period = cfg_trainer['save_period']
         self.monitor = cfg_trainer.get('monitor', 'off')
 
+        self.data_type = data_type  
+        
         # configuration to monitor model performance and save best
         if self.monitor == 'off':
             self.mnt_mode = 'off'
@@ -51,7 +53,7 @@ class BaseTrainer:
 
         self.start_epoch = 1
 
-        self.checkpoint_dir = config['trainer']['save_dir']
+        self.checkpoint_dir = os.path.join(config['trainer']['save_dir'], self.data_type)
 
         # setup visualization writer instance                
         self.writer = WandbWriter(config['log_dir'], self.logger, config)
@@ -148,7 +150,7 @@ class BaseTrainer:
         torch.save(state, filename)
         self.logger.info("Saving checkpoint: {} ...".format(filename))
         if save_best:
-            best_path = os.path.join(save_dir, 'model_best.pth')
+            best_path = os.path.join(save_dir, 'model_best(epoch{epoch}).pth')
 
             torch.save(state, best_path)
             self.logger.info("Saving current best: model_best.pth ...")

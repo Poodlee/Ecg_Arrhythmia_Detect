@@ -51,7 +51,7 @@ class GradCam:
         return cam
 
     @staticmethod
-    def overlay_heatmap(image, heatmap, alpha=0.3, cmap='jet'):
+    def overlay_heatmap(image, heatmap, alpha=0.3, cmap='jet', sample_idx=0):
         """
         Overlay the Grad-CAM heatmap on the original image.
         """
@@ -80,6 +80,10 @@ class GradCam:
         
         print(f"[DEBUG] Final image shape: {image.shape}")
         print(f"[DEBUG] Final heatmap_colored shape: {heatmap_colored.shape}")
+
+        # sample_idx
+        image = image[sample_idx]
+        heatmap_colored = heatmap_colored[sample_idx]
 
         # Blend the heatmap with the original image
         overlayed = cv2.addWeighted(image, 1 - alpha, heatmap_colored, alpha, 0)       
