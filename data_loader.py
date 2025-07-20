@@ -54,12 +54,12 @@ class DataLoaderFactory:
     
 
 class Mit_bihDataLoader(BaseDataLoader):
-    def __init__(self, data_dir, batch_size=32, shuffle=True, validation_split=0.1, num_workers=8, fs=360):
-        self.dataset = Mit_bihDataset(data_path=data_dir, split='train' if validation_split > 0 else 'test', fs=fs)
+    def __init__(self, data_dir, batch_size=32, shuffle=True, split = 'train', validation_split=0.1, num_workers=8, fs=360):
+        self.dataset = Mit_bihDataset(data_path=data_dir, split = split, fs=fs)
         super().__init__(self.dataset, batch_size, shuffle, validation_split, num_workers)
 
 class Mit_bihDataset(Dataset):
-    def __init__(self, data_path, split='train', fs=360, transform=None):
+    def __init__(self, data_path, split, fs=360, transform=None):
         self.data_path = data_path
         self.split = split
         self.fs = fs
@@ -142,12 +142,12 @@ class Mit_bihDataset(Dataset):
         return {'x1': x1,'x2': x2}, y
 
 class IncartDataLoader(BaseDataLoader):
-    def __init__(self, data_dir, batch_size=32, shuffle=True, validation_split=0.1, num_workers=8, fs=360):
-        self.dataset = IncartDataset(data_path=data_dir, split='train' if validation_split > 0 else 'test', fs=fs)
+    def __init__(self, data_dir, batch_size=32, shuffle=True, split= 'train', validation_split=0.1, num_workers=8, fs=360):
+        self.dataset = IncartDataset(data_path=data_dir, split=split, fs=fs)
         super().__init__(self.dataset, batch_size, shuffle, validation_split, num_workers)
 
 class IncartDataset(Dataset):
-    def __init__(self, data_path, split='train', fs=274, transform=None):
+    def __init__(self, data_path, split, fs=274, transform=None):
         self.data_path = data_path
         self.split = split
         self.fs = fs
@@ -227,13 +227,13 @@ class IncartDataset(Dataset):
         return {'x1': x1,'x2': x2}, y
 
 class EuropeansttDataLoader(BaseDataLoader):
-    def __init__(self, data_dir, batch_size=32, shuffle=True, validation_split=0.1, num_workers=8, fs=360):
-        self.dataset = EuropeansttDataset(data_path=data_dir, split='train' if validation_split > 0 else 'test', fs=fs)
+    def __init__(self, data_dir, batch_size=32, shuffle=True, split='train', validation_split=0.1, num_workers=8, fs=360):
+        self.dataset = EuropeansttDataset(data_path=data_dir, split=split, fs=fs)
         super().__init__(self.dataset, batch_size, shuffle, validation_split, num_workers)
 
 ## TEST 용 ##
 class EuropeansttDataset(Dataset):
-    def __init__(self, data_path, split='train', fs=250, transform=None):
+    def __init__(self, data_path, split, fs=250, transform=None):
         self.data_path = data_path
         self.split = split
         self.fs = fs

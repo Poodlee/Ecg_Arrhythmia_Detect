@@ -363,4 +363,4 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
             y.append(label)
             count +=1
     print(f'{count} done')
-    return x1, x2, y
+    return x1, x2, y        

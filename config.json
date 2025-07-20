@@ -9,6 +9,7 @@
     "data_loader": {
         "type": "incart",
         "args":{
+            "split": "train",
             "data_dir": "data/incart/files",
             "batch_size": 512,
             "shuffle": true,
