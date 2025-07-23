@@ -36,10 +36,12 @@ def infer_single_sample(model, data, device):
 
 def move_servo_if_v(pred):
     try:
-        servo_bus = ServoBus('/dev/ttyUSB0')
+        servo_bus = ServoBus('COM3')
         if pred == 2:
+            servo_bus.move_time_write(1, 0, 2.0)  # Move to 0 degrees
             logger.info("Detected class V, moving servo from 0 to 120 degrees over 2 seconds")
             servo_bus.move_time_write(1, 120, 2.0)  
+            
     except Exception as e:
         logger.error(f"Servo control failed: {str(e)}")
 
@@ -47,9 +49,9 @@ def main(config):
     
     data_loader = DataLoaderFactory.get_dataloader(config['data_loader']['type'], **config['data_loader']['args'])
     dataset = data_loader.dataset
-    
+        
     model = ModelFactory.get_model((config['arch']['type']))
-    logger.info('Loading checkpoint: {} ...'.format(config['resume']))    loss_fn = criterion.get_loss()  
+    logger.info('Loading checkpoint: {} ...'.format(config['resume']))   
     checkpoint = torch.load(config['resume'], weights_only=False)
     state_dict = checkpoint['state_dict']
     if config['n_gpu'] > 1:
