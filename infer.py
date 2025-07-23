@@ -27,7 +27,7 @@ def set_random_seeds(seed=7):
     np.random.seed(seed)
 
 def main(config):
-    
+    set_random_seeds()
     data_loader = DataLoaderFactory.get_dataloader(config['data_loader']['type'], **config['data_loader']['args'])
     model = ModelFactory.get_model((config['arch']['type']))
         
