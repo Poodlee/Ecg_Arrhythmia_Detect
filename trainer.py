@@ -42,11 +42,11 @@ class Trainer(BaseTrainer):
         self.model.train()
 
         self.train_metrics.reset()
-        for batch_idx, (data, target) in enumerate(tqdm(self.data_loader, desc=f"Epoch[Train] {epoch} Batches", dynamic_ncols=True, leave=False)):
-            data, target = {k: v.to(self.device) for k,v in data.items()}, target.to(self.device)
+        for batch_idx, (x1, x2, target) in enumerate(tqdm(self.data_loader, desc=f"Epoch[Train] {epoch} Batches", dynamic_ncols=True, leave=False)):
+            x1, x2, target = x1.to(self.device), x2.to(self.device), target.to(self.device)
 
             self.optimizer.zero_grad()
-            output = self.model(**data)
+            output = self.model(x1, x2)
             
             loss = self.criterion(output, target)
             loss.backward()    
@@ -83,11 +83,11 @@ class Trainer(BaseTrainer):
         self.model.eval()
         self.valid_metrics.reset()
         with torch.no_grad():
-            for batch_idx, (data, target) in enumerate(tqdm(self.valid_data_loader, desc=f"Epoch[Valid] {epoch} Batches", dynamic_ncols=True, leave=False)):
-                data, target = {k: v.to(self.device) for k,v in data.items()}, target.to(self.device)
+            for batch_idx, (x1, x2, target) in enumerate(tqdm(self.valid_data_loader, desc=f"Epoch[Valid] {epoch} Batches", dynamic_ncols=True, leave=False)):
+                x1, x2, target = x1.to(self.device), x2.to(self.device), target.to(self.device)
 
                 self.optimizer.zero_grad()
-                output = self.model(**data)
+                output = self.model(x1, x2)
                 loss = self.criterion(output, target)
 
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
@@ -95,7 +95,7 @@ class Trainer(BaseTrainer):
                 num_classes = 3
                 for met in self.metric_ftns:
                     self.valid_metrics.update(f'val_{met.__name__}', met(output, target, num_classes))
-                self.writer.add_image('input', make_grid(data['x1'].cpu(), nrow=8, normalize=True))
+                self.writer.add_image('input', make_grid(x1.cpu(), nrow=8, normalize=True))
 
         return self.valid_metrics.result()
 

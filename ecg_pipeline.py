@@ -13,6 +13,8 @@ import cv2
 import torch
 import os
 
+from tqdm import tqdm
+
 # ECG signal pre-processing (denoising, standardization, feature extraction, etc.)
 
 def bandpass_filter(signal_array, fs, lowcut=0.5, highcut=40, order=4):
@@ -133,7 +135,7 @@ PhysioBank = {
         "/": 4, # Peaced beats        
 }
 
-def prepare_scaled_records(records, database, sampling_rate, path_str):
+def prepare_scaled_records(records, database, sampling_rate, path_str, preprocess):
     scaled_signals = []
     r_peak_list = []
     ann_list = []
@@ -150,11 +152,14 @@ def prepare_scaled_records(records, database, sampling_rate, path_str):
         anns = wfdb.rdann(f'{path_str}/{record}', extension='atr')
         r_peaks, annotations = anns.sample, anns.symbol                                        
         
-        baseline = sg.medfilt(sg.medfilt(ecg, int(0.2 * sampling_rate) - 1), int(0.6 * sampling_rate) - 1)
+        if preprocess == 'median':
+            baseline = sg.medfilt(sg.medfilt(ecg, int(0.2 * sampling_rate) - 1), int(0.6 * sampling_rate) - 1)    
+            filtered_signal = ecg - baseline
+            scaled_signal = filtered_signal 
+        else:
+            scaled_signal = ecg
         
-        filtered_signal = ecg - baseline
-                
-        scaled_signal = filtered_signal   
+          
         scaled_signals.append(scaled_signal)
         
         # align r-peaks
@@ -210,8 +215,14 @@ def get_peaks_ecg(ecg, rpeak, rr_avg, rr_next, sampling_rate):
     tpeak = tpeak if tpeak < len(ecg) else rpeak
     return ppeak, qpeak, rpeak, speak, tpeak
 
-def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train, before, after): 
+def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train, before, after, xy_method): 
     
+    if xy_method == 'pmat':
+        x1, x2, y = pmat_xy(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train, before, after)
+    
+    return x1, x2, y
+    
+def pmat_xy(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train, before, after):
     wavelet = "gaus4"  # mexh, morl, gaus8, gaus4
     scales = pywt.central_frequency(wavelet) * sampling_rate / np.arange(1, 80, 1)    
     
@@ -219,7 +230,7 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
     x1, y = [], []
     x2 = []
     
-    for i in range(len(scaled_signals)):
+    for i in tqdm(range(len(scaled_signals)), desc="Processing ECG Records"):
         
         # needed for extract limited beats from ST-T database
         counter_beats = {0:0,1:0,2:0}
@@ -232,9 +243,9 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
         avg_rri = np.mean(np.diff(r_peaks))        
         
         all_peaks = [get_peaks_ecg(scaled_ecg, rpeak=r_peaks[k], 
-                           rr_avg=r_peaks[k]-r_peaks[k-1] if k>0 and anns[k-1] not in invalid_anns else avg_rri, 
-                           rr_next=r_peaks[k+1]-r_peaks[k] if k+1<len(r_peaks) and anns[k+1] not in invalid_anns else avg_rri, 
-                           sampling_rate=sampling_rate) for k in range(len(r_peaks))]
+                        rr_avg=r_peaks[k]-r_peaks[k-1] if k>0 and anns[k-1] not in invalid_anns else avg_rri, 
+                        rr_next=r_peaks[k+1]-r_peaks[k] if k+1<len(r_peaks) and anns[k+1] not in invalid_anns else avg_rri, 
+                        sampling_rate=sampling_rate) for k in range(len(r_peaks))]
 
         # Hand craft features
         valid_peaks = [all_peaks[k] for k in range(1,len(r_peaks)-1) if anns[k-1] not in invalid_anns and anns[k] not in invalid_anns and anns[k+1] not in invalid_anns]               
@@ -283,9 +294,6 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
             if r_prev<before or NP - r_next<after:
                 continue                                                     
             
-            if count % 20000 ==0:
-                print(f'{count} done')              
-            
             label = PhysioBank[ann] 
             label_prev = PhysioBank[anns[k-1]]
             if label == 3:
@@ -312,16 +320,12 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
             # statistics
             sktest = skewtest(heartbeat)            
             #shapirotest = shapiro(heartbeat)                       
-            
-            subset = 'train' if train else 'test'
-            os.makedirs(f'.\\data\\{database}\\pmat\\{subset}', exist_ok=True)                        
-            path_current = f'.\\data\\{database}\\pmat\\{subset}\\x1_{i}_{r}.pt' 
-            
+                        
             # Scale the heartbeat            
             heartbeat = (heartbeat-heartbeat.min())/(heartbeat.max()-heartbeat.min())                                    
             heartbeat_prev = (heartbeat_prev-heartbeat_prev.min())/(heartbeat_prev.max()-heartbeat_prev.min())                         
             heartbeat_next = (heartbeat_next-heartbeat_next.min())/(heartbeat_next.max()-heartbeat_next.min())                                                                                                                                               
-                                         
+                                        
             if len(m_current)==0:
                 m_prev = pmat(heartbeat_prev, max_window=100, direction='Left') 
                 m_prev = cv2.resize(m_prev, (120, 120))
@@ -336,12 +340,11 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
             m_next = cv2.resize(m_next, (120, 120))                                    
             
             m = torch.tensor(np.array([m_prev, m_current, m_next])).reshape([3,120, 120]).float()
-            torch.save(m, path_current)
             
             # OR Take only the current heartbeat
             '''
             m_current = pmat(heartbeat, max_window=100, direction='Left')
-           
+        
             m_current = cv2.resize(m_current, (120, 120))
             m = torch.tensor(np.array([m_current])).reshape([1,120, 120]).float()
             torch.save(m, path_current)  
@@ -356,11 +359,11 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
                 (r_peaks[k + 1] - r_peaks[k]) / avg_rri,  # post RR Interval
                 (r_peaks[k] - r_peaks[k - 1]) / (r_peaks[k + 1] - r_peaks[k]),  # ratio RR Interval                
                 avg_rri_local / avg_rri,  # local RR Interval
-            ])            
+            ], dtype=np.float32)          
             
-            x1.append(path_current)
+            x1.append(m)
             x2.append(input_2)
             y.append(label)
             count +=1
-    print(f'{count} done')
-    return x1, x2, y        
+
+    return x1, x2, y

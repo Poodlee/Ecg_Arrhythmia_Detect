@@ -17,20 +17,20 @@ class GradCam:
         """
         Save the feature maps during the forward pass.
         """
-        self.feature_maps = output
+        self.feature_maps = output.detach()
 
     def _save_gradients(self, module, grad_input, grad_output):
         """
         Save the gradients during the backward pass.
         """
-        self.gradients = grad_output[0]
+        self.gradients = grad_output[0].detach()
 
-    def generate_heatmap(self, x, class_idx=None, sample_idx=0):
+    def generate_heatmap(self, x1, x2, class_idx=None, sample_idx=0):
         """
         Generate Grad-CAM heatmap.
         """
         self.net.zero_grad()  # Reset gradients on the underlying PyTorch model
-        output = self.net(**x)  # Extract feature map 
+        output = self.net(x1, x2)  # Extract feature map 
 
         if class_idx is None:
             class_idx = torch.argmax(output[sample_idx]) # First sample's class index
@@ -81,9 +81,8 @@ class GradCam:
         print(f"[DEBUG] Final image shape: {image.shape}")
         print(f"[DEBUG] Final heatmap_colored shape: {heatmap_colored.shape}")
 
-        # sample_idx
-        image = image[sample_idx]
-        heatmap_colored = heatmap_colored[sample_idx]
+        print("image shape:", image.shape)
+        print("heatmap_colored shape:", heatmap_colored.shape)
 
         # Blend the heatmap with the original image
         overlayed = cv2.addWeighted(image, 1 - alpha, heatmap_colored, alpha, 0)       

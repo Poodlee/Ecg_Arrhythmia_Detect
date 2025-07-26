@@ -54,12 +54,12 @@ class DataLoaderFactory:
     
 
 class Mit_bihDataLoader(BaseDataLoader):
-    def __init__(self, data_dir, batch_size=32, shuffle=True, split = 'train', validation_split=0.1, num_workers=8, fs=360):
-        self.dataset = Mit_bihDataset(data_path=data_dir, split = split, fs=fs)
+    def __init__(self, data_dir, preprocess, xy_method, batch_size=32, shuffle=True, split = 'train', validation_split=0.1, num_workers=8, fs=360):
+        self.dataset = Mit_bihDataset(data_path=data_dir, split = split, fs=fs, preprocess=preprocess, xy_method=xy_method)
         super().__init__(self.dataset, batch_size, shuffle, validation_split, num_workers)
 
 class Mit_bihDataset(Dataset):
-    def __init__(self, data_path, split, fs=360, transform=None):
+    def __init__(self, data_path, preprocess, xy_method, split, fs=360, transform=None):
         self.data_path = data_path
         self.split = split
         self.fs = fs
@@ -74,80 +74,38 @@ class Mit_bihDataset(Dataset):
         
         # split에 따라 레코드 선택
         self.records = records_mit_train if split == 'train' else records_mit_test
-        
-        # 처리된 데이터 저장 경로
-        self.processed_dir = os.path.join(data_path, 'processed', split)
-                
-        # 데이터가 이미 존재하는지 확인
-        self.data_file = os.path.join(self.processed_dir, f"{split}_infos.pt")
-        
-        if os.path.exists(self.data_file):
-            
-            split_infos = torch.load(self.data_file, weights_only=False)
-            self.x1 = split_infos['x1']
-            
-            x2_np = np.array(split_infos['x2']).astype(np.float64)
-            
-            # StandardScaler 적용
-            mean = x2_np.mean(axis=0)
-            std = x2_np.std(axis=0)
-            std[std == 0] = 1.0  
-            x2_scaled = (x2_np - mean) / std
-            self.x2 = torch.tensor(x2_scaled, dtype=torch.float32)
-            self.y = torch.LongTensor(split_infos['y'])
-            
-        else:
-            os.makedirs(self.processed_dir, exist_ok=True)
 
-            # 데이터 전처리
-            scaled_signals, r_peak_list, ann_list = prepare_scaled_records(
-                self.records, database='mit_bih', sampling_rate=self.fs, path_str=self.data_path
-            )
-            before, after = 90, 100 # MIT
+        # 데이터 전처리
+        scaled_signals, r_peak_list, ann_list = prepare_scaled_records(
+            self.records, database='mit_bih', sampling_rate=self.fs, path_str=self.data_path, preprocess=process
+        )
+        before, after = 90, 100 # MIT
 
-            # 특징 추출 및 데이터 준비
-            self.x1, self.x2, self.y = getXY(
-                scaled_signals, r_peak_list, ann_list, database='mit_bih', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after
-            )
-            # 데이터 저장
-            torch.save({
-                'x1': self.x1,
-                'x2': self.x2,
-                'y': self.y
-            }, self.data_file)
-    
+        # 특징 추출 및 데이터 준비
+        self.x1, self.x2, self.y = getXY(
+            scaled_signals, r_peak_list, ann_list, database='mit_bih', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after, xy_method=xy_method
+        )
 
-        
     def __len__(self):
         return len(self.y)
     
     def __getitem__(self, idx):
-        path_x1 = self.x1[idx]
-        x1 = torch.load(path_x1) 
-        
+        x1 = self.x1[idx]        
         x2 = self.x2[idx]
-        if isinstance(x2, np.ndarray):
-            x2 = torch.tensor(x2, dtype=torch.float32)
-            x2 = x2.detach().clone()
         y = self.y[idx]
         
         if self.transform:
             x1 = self.transform(x1)
-            
-        if self.split == 'train':
-            noise = add_noise(x1.cpu().numpy(), self.fs)
-            noise = torch.tensor(noise, dtype=torch.float32).to(x1.device) 
-            x1 = x1 + noise
         
-        return {'x1': x1,'x2': x2}, y
+        return x1, x2, y
 
 class IncartDataLoader(BaseDataLoader):
-    def __init__(self, data_dir, batch_size=32, shuffle=True, split= 'train', validation_split=0.1, num_workers=8, fs=360):
-        self.dataset = IncartDataset(data_path=data_dir, split=split, fs=fs)
+    def __init__(self, data_dir, preprocess, xy_method, batch_size=32, shuffle=True, split= 'train', validation_split=0.1, num_workers=8, fs=360):
+        self.dataset = IncartDataset(data_path=data_dir, split=split, fs=fs, preprocess=preprocess, xy_method=xy_method)
         super().__init__(self.dataset, batch_size, shuffle, validation_split, num_workers)
 
 class IncartDataset(Dataset):
-    def __init__(self, data_path, split, fs=274, transform=None):
+    def __init__(self, preprocess, xy_method, data_path, split, fs=274, transform=None, ):
         self.data_path = data_path
         self.split = split
         self.fs = fs
@@ -159,81 +117,39 @@ class IncartDataset(Dataset):
         
         # split에 따라 레코드 선택
         self.records = records_incart_train if split == 'train' else records_incart_test
-        
-        # 처리된 데이터 저장 경로
-        self.processed_dir = os.path.join(data_path, 'processed', split)
-                
-        # 데이터가 이미 존재하는지 확인
-        self.data_file = os.path.join(self.processed_dir, f"{split}_infos.pt")
-        
-        if os.path.exists(self.data_file):
-            
-            split_infos = torch.load(self.data_file, weights_only=False)
-            self.x1 = split_infos['x1']
-            
-            x2_np = np.array(split_infos['x2']).astype(np.float64)
-            
-            # StandardScaler 적용
-            mean = x2_np.mean(axis=0)
-            std = x2_np.std(axis=0)
-            std[std == 0] = 1.0  
-            x2_scaled = (x2_np - mean) / std
-            self.x2 = torch.tensor(x2_scaled, dtype=torch.float32)
-            self.y = torch.LongTensor(split_infos['y'])
-            
-        else:
-            os.makedirs(self.processed_dir, exist_ok=True)
 
-            # 데이터 전처리
-            scaled_signals, r_peak_list, ann_list = prepare_scaled_records(
-                self.records, database='incart', sampling_rate=fs, path_str=self.data_path
-            )
-            
-            before, after = 70, 75
-            
-            # 특징 추출 및 데이터 준비
-            self.x1, self.x2, self.y = getXY(
-                scaled_signals, r_peak_list, ann_list, database='incart', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after
-            )
-            
-            # 데이터 저장
-            torch.save({
-                'x1': self.x1,
-                'x2': self.x2,
-                'y': self.y
-            }, self.data_file)
+        # 데이터 전처리
+        scaled_signals, r_peak_list, ann_list = prepare_scaled_records(
+            self.records, database='incart', sampling_rate=fs, path_str=self.data_path, preprocess=preprocess
+        )
         
+        before, after = 70, 75
+        # 특징 추출 및 데이터 준비
+        self.x1, self.x2, self.y = getXY(
+            scaled_signals, r_peak_list, ann_list, database='incart', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after, xy_method=xy_method
+        )
+                
     def __len__(self):
         return len(self.y)
     
     def __getitem__(self, idx):
-        path_x1 = self.x1[idx]
-        x1 = torch.load(path_x1) 
-        
+        x1 = self.x1[idx]        
         x2 = self.x2[idx]
-        if isinstance(x2, np.ndarray):
-            x2 = torch.tensor(x2, dtype=torch.float32)
-            x2 = x2.detach().clone()
         y = self.y[idx]
         
         if self.transform:
             x1 = self.transform(x1)
-            
-        if self.split == 'train':
-            noise = add_noise(x1.cpu().numpy(), self.fs)
-            noise = torch.tensor(noise, dtype=torch.float32).to(x1.device) 
-            x1 = x1 + noise
         
-        return {'x1': x1,'x2': x2}, y
+        return x1, x2, y
 
 class EuropeansttDataLoader(BaseDataLoader):
-    def __init__(self, data_dir, batch_size=32, shuffle=True, split='train', validation_split=0.1, num_workers=8, fs=360):
-        self.dataset = EuropeansttDataset(data_path=data_dir, split=split, fs=fs)
+    def __init__(self, data_dir, preprocess, xy_method, batch_size=32, shuffle=True, split='train', validation_split=0.1, num_workers=8, fs=360):
+        self.dataset = EuropeansttDataset(data_path=data_dir, split=split, fs=fs, preprocess=preprocess, xy_method=xy_method)
         super().__init__(self.dataset, batch_size, shuffle, validation_split, num_workers)
 
 ## TEST 용 ##
 class EuropeansttDataset(Dataset):
-    def __init__(self, data_path, split, fs=250, transform=None):
+    def __init__(self, preprocess, xy_method, data_path, split, fs=250, transform=None):
         self.data_path = data_path
         self.split = split
         self.fs = fs
@@ -246,77 +162,36 @@ class EuropeansttDataset(Dataset):
         # split에 따라 레코드 선택
         self.records = records_incart_train if split == 'train' else records_incart_test
         
-        # 처리된 데이터 저장 경로
-        self.processed_dir = os.path.join(data_path, 'processed', split)
-                
-        # 데이터가 이미 존재하는지 확인
-        self.data_file = os.path.join(self.processed_dir, f"{split}_infos.pt")
+        path_str_stt = 'data/europeanstt'
+        mlii_records_stt = []
+        with open(f'{path_str_stt}/RECORDS', 'r') as file:    
+            for record_name in file.readlines():
+                record_name=record_name.replace('\n','')
+                with open(f'{path_str_stt}/{record_name}.hea') as file_header:
+                    for line_number, line in enumerate(file_header, start=1):
+                        if 'MLIII' in line:
+                            # ('e0103', 1) are the record name and the channel of the mlii lead
+                            mlii_records_stt.append((record_name, line_number-2))
+                            break
+                    file_header.close()
+            file.close()            
+        # 데이터 전처리
+        scaled_signals1_stt, r_peak_list1_stt, ann_list1_stt = prepare_scaled_records(mlii_records_stt,'stt', fs, path_str_stt, preprocess=preprocess)            
+        before, after = 62, 70
         
-        if os.path.exists(self.data_file):
-            
-            split_infos = torch.load(self.data_file, weights_only=False)
-            self.x1 = split_infos['x1']
-            
-            x2_np = np.array(split_infos['x2']).astype(np.float64)
-            
-            # StandardScaler 적용
-            mean = x2_np.mean(axis=0)
-            std = x2_np.std(axis=0)
-            std[std == 0] = 1.0  
-            x2_scaled = (x2_np - mean) / std
-            self.x2 = torch.tensor(x2_scaled, dtype=torch.float32)
-            
-            self.y = torch.LongTensor(split_infos['y'])
-            
-        else:
-            os.makedirs(self.processed_dir, exist_ok=True)
+        # 특징 추출 및 데이터 준비
+        self.x1, self.x2, self.y = getXY(scaled_signals1_stt, r_peak_list1_stt, ann_list1_stt, 'stt',250, True, before=before, after=after, xy_method=xy_method)
 
-            path_str_stt = 'data/europeanstt'
-            mlii_records_stt = []
-            with open(f'{path_str_stt}/RECORDS', 'r') as file:    
-                for record_name in file.readlines():
-                    record_name=record_name.replace('\n','')
-                    with open(f'{path_str_stt}/{record_name}.hea') as file_header:
-                        for line_number, line in enumerate(file_header, start=1):
-                            if 'MLIII' in line:
-                                # ('e0103', 1) are the record name and the channel of the mlii lead
-                                mlii_records_stt.append((record_name, line_number-2))
-                                break
-                        file_header.close()
-                file.close()            
-            # 데이터 전처리
-            scaled_signals1_stt, r_peak_list1_stt, ann_list1_stt = prepare_scaled_records(mlii_records_stt,'stt', fs, path_str_stt)            
-            before, after = 62, 70
-            
-            # 특징 추출 및 데이터 준비
-            self.x1, self.x2, self.y = getXY(scaled_signals1_stt, r_peak_list1_stt, ann_list1_stt, 'stt',250, True, before=before, after=after)
-            
-            # 데이터 저장
-            torch.save({
-                'x1': self.x1,
-                'x2': self.x2,
-                'y': self.y
-            }, self.data_file)
         
     def __len__(self):
         return len(self.y)
     
     def __getitem__(self, idx):
-        path_x1 = self.x1[idx]
-        x1 = torch.load(path_x1) 
-        
+        x1 = self.x1[idx]        
         x2 = self.x2[idx]
-        if isinstance(x2, np.ndarray):
-            x2 = torch.tensor(x2, dtype=torch.float32)
-            x2 = x2.detach().clone()
         y = self.y[idx]
         
         if self.transform:
             x1 = self.transform(x1)
-            
-        if self.split == 'train':
-            noise = add_noise(x1.cpu().numpy(), self.fs)
-            noise = torch.tensor(noise, dtype=torch.float32).to(x1.device) 
-            x1 = x1 + noise
         
-        return {'x1': x1,'x2': x2}, y
+        return x1, x2, y

@@ -13,6 +13,8 @@
             "data_dir": "data/incart/files",
             "batch_size": 512,
             "shuffle": true,
+            "preprocess": "median",
+            "xy_method": "pmat",
             "validation_split": 0.1,
             "num_workers": 2
         }

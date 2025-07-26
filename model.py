@@ -238,10 +238,7 @@ class PMAT(BaseModel):
         x1 = x1.view((-1, 128))   
         return x1
 
-    def forward(self, **kwarg):
-        x2 = kwarg['x2']
-        x1 = kwarg['x1']                
-
+    def forward(self, x1, x2):
         x1 = self.extract_features(x1)
         x1 = F.relu(self.fc0(x1))
         x2 = F.relu(self.fc1(x2))        

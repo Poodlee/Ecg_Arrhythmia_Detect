@@ -61,9 +61,9 @@ def main(config):
   
     n_classes = 3
     with torch.no_grad():
-        for i, (data, target) in enumerate(tqdm(data_loader)):
-            data, target = {k: v.to(device) for k,v in data.items()}, target.to(device)
-            preds = model(**data)
+        for i, (x1, x2, target) in enumerate(tqdm(data_loader)):
+            x1, x2, target = x1.to(device), x2.to(device), target.to(device)
+            preds = model(x1, x2)
             
             # Save for confusion matrix
             all_probs.append(torch.softmax(preds, dim=1).cpu().numpy())
@@ -159,20 +159,84 @@ def main(config):
     #####################
     # === GRAD  CAM === #
     #####################
+    from pytorch_grad_cam import GradCAM
+    from pytorch_grad_cam.utils.image import show_cam_on_image
+    from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+    from pytorch_grad_cam.utils.image import deprocess_image
+
+    from torchvision.transforms.functional import normalize
+
     sample_idx = 0
     
-    sample_data, _ = next(iter(data_loader))
-    sample = {k: v.to(device) for k,v in sample_data.items()}
+    x1, x2, _ = next(iter(data_loader))
+    x1, x2 = x1.to(device), x2.to(device)
+        
     target_layer = model.conv3 if hasattr(model, 'conv3') else list(model.children())[-1]
-    gradcam = GradCam(model, target_layer)
-    heatmap = gradcam.generate_heatmap(sample, sample_idx=sample_idx)
-    overlay = GradCam.overlay_heatmap(sample['x1'], heatmap, sample_idx=sample_idx)
-    plt.figure(figsize=(8,4))
-    plt.subplot(1,2,1); plt.title("Original"); plt.imshow(sample['x1'][sample_idx].cpu().squeeze().permute(1,2,0), cmap='gray'); plt.axis('off')
-    plt.subplot(1,2,2); plt.title("Grad-CAM"); plt.imshow(overlay.transpose(1,2,0), cmap='jet'); plt.axis('off')
-    plt.savefig(os.path.join(config['output_dir'], f'gradcam_sample_{time}.png'), dpi=300, bbox_inches='tight')
+    
+    class WrappedModel(torch.nn.Module):
+        def __init__(self, original_model, x2):
+            super().__init__()
+            self.original_model = original_model
+            self.x2 = x2
+        
+        def forward(self, x1):
+            return self.original_model(x1, self.x2)
+    
+    wrapped_model = WrappedModel(model, x2)
 
-    print(f"GRAD CAM result saved to {os.path.join(config['output_dir'], f'gradcam_sample_{time}.png')}")
+    cam = GradCAM(model=wrapped_model, target_layers=[target_layer])
+
+    model.eval()
+    with torch.no_grad():
+        outputs = model(x1, x2)
+        preds = torch.argmax(outputs, dim=1)
+    
+    targets = [ClassifierOutputTarget(preds[sample_idx].item())]
+
+    # Generate CAM
+    grayscale_cam = cam(
+        input_tensor=x1,
+        targets=targets,
+        aug_smooth=True,
+        eigen_smooth=False
+    )[sample_idx]  # shape: (H, W)
+
+    # Prepare original image
+    rgb_image = x1[sample_idx].cpu().permute(1, 2, 0).numpy()
+    
+    # Normalize image to [0,1] range
+    rgb_image = (rgb_image - rgb_image.min()) / (rgb_image.max() - rgb_image.min() + 1e-8)
+    rgb_image = np.clip(rgb_image, 0, 1)  # Ensure values are in valid range
+    
+    # Overlay CAM on image
+    visualization = show_cam_on_image(
+        rgb_image,
+        grayscale_cam,
+        use_rgb=True,
+        image_weight=0.5  # Balance between image and heatmap
+    )
+    
+    # Create visualization
+    plt.figure(figsize=(10, 5))
+    
+    plt.subplot(1, 2, 1)
+    plt.title("Original Image")
+    plt.imshow(rgb_image)
+    plt.axis("off")
+    
+    plt.subplot(1, 2, 2)
+    plt.title(f"Grad-CAM (Class {preds[sample_idx].item()})")
+    plt.imshow(visualization)
+    plt.axis("off")
+
+    os.makedirs(config['output_dir'], exist_ok=True)
+    output_path = os.path.join(
+        config['output_dir'],
+        f'gradcam_sample_{sample_idx}_{int(torch.cuda.get_device_properties(0).total_memory/1024**2)}MB.png'
+    )
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Grad-CAM visualization saved to {output_path}")
   
 
 if __name__ == '__main__':
