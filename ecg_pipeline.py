@@ -12,7 +12,7 @@ import pywt
 import cv2
 import torch
 import os
-
+from tqdm import tqdm
 # ECG signal pre-processing (denoising, standardization, feature extraction, etc.)
 
 def bandpass_filter(signal_array, fs, lowcut=0.5, highcut=40, order=4):
@@ -219,7 +219,7 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
     x1, y = [], []
     x2 = []
     
-    for i in range(len(scaled_signals)):
+    for i in tqdm(range(len(scaled_signals)), desc="Processing ECG Records"):
         
         # needed for extract limited beats from ST-T database
         counter_beats = {0:0,1:0,2:0}
@@ -282,10 +282,7 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
             
             if r_prev<before or NP - r_next<after:
                 continue                                                     
-            
-            if count % 20000 ==0:
-                print(f'{count} done')              
-            
+                        
             label = PhysioBank[ann] 
             label_prev = PhysioBank[anns[k-1]]
             if label == 3:
@@ -344,7 +341,7 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
                 (r_peaks[k + 1] - r_peaks[k]) / avg_rri,  # post RR Interval
                 (r_peaks[k] - r_peaks[k - 1]) / (r_peaks[k + 1] - r_peaks[k]),  # ratio RR Interval                
                 avg_rri_local / avg_rri,  # local RR Interval
-            ])            
+            ], dtype=np.float32)            
             
             x1.append(m)
             x2.append(input_2)

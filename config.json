@@ -7,10 +7,10 @@
         "args": {}
     },
     "data_loader": {
-        "type": "incart",
+        "type": "mit_bih",
         "args":{
             "split": "train",
-            "data_dir": "data/incart/files",
+            "data_dir": "data/mit_bih",
             "batch_size": 512,
             "shuffle": true,
             "validation_split": 0.1,
@@ -43,7 +43,7 @@
         }
     },
     "trainer": {
-        "epochs": 20,
+        "epochs": 50,
 
         "save_dir": "saved/",
         "save_period": 1,

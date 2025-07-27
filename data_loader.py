@@ -81,7 +81,7 @@ class Mit_bihDataset(Dataset):
         )
         before, after = 90, 100 # MIT
         self.x1, self.x2, self.y = getXY(
-                scaled_signals, r_peak_list, ann_list, database='mit_bih', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after, xy_method=xy_method
+                scaled_signals, r_peak_list, ann_list, database='mit_bih', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after
         )
 
 
@@ -90,24 +90,14 @@ class Mit_bihDataset(Dataset):
         return len(self.y)
     
     def __getitem__(self, idx):
-        path_x1 = self.x1[idx]
-        x1 = torch.load(path_x1) 
-        
-        x2 = self.x2[idx]
-        if isinstance(x2, np.ndarray):
-            x2 = torch.tensor(x2, dtype=torch.float32)
-            x2 = x2.detach().clone()
         y = self.y[idx]
+        x1 = self.x1[idx]        
+        x2 = self.x2[idx]
         
         if self.transform:
             x1 = self.transform(x1)
-            
-        if self.split == 'train':
-            noise = add_noise(x1.cpu().numpy(), self.fs)
-            noise = torch.tensor(noise, dtype=torch.float32).to(x1.device) 
-            x1 = x1 + noise
         
-        return {'x1': x1,'x2': x2}, y
+        return x1, x2, y
 
 class IncartDataLoader(BaseDataLoader):
     def __init__(self, data_dir, batch_size=32, shuffle=True, split= 'train', validation_split=0.1, num_workers=8, fs=360):
