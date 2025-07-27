@@ -2,20 +2,34 @@
     "name": "Test Setting",
     "n_gpu": 1,
     "gpu": "cuda:0",
-    "resume": "saved/mit_bih/20250726-160037/model_best(epoch14).pth",
+    "resume": "saved/mit_bih/20250727-173342/model_best(epoch14).pth",
     "output_dir": "outputs/",
     "arch": {
-        "type": "pmat",
+        "type": "simple1dcnn",
         "args": {}
     },
     "data_loader": {
-        "type": "incart",
+        "type": "mit_bih",
+        "setting": {
+            "input_channels": 1,
+            "n_classes": 3
+        },
         "args":{
             "split": "test",
-            "data_dir": "data/incart/files",
+            "data_dir": "data/mit_bih",
             "batch_size": 512,
-            "preprocess": "median",
-            "xy_method": "pmat",
+            "preprocess": {"_resample_rate": 250,
+                            "_denoise": {
+                                "bpf": [0.5, 40],
+                                "median": [200, 600],
+                                "median_mode": "double"  
+                            },
+                            "_normalize": "minmax",
+                            "_augmentation": {
+                                "noise": 0.01
+                            }
+                          },
+            "xy_method": "simple",
             "shuffle": "False",
             "validation_split": 0.0,
             "num_workers": 2

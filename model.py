@@ -246,6 +246,37 @@ class PMAT(BaseModel):
         x = F.relu(self.fc11(x))
         x = self.fc2(x)
         return x
+
+class Simple1DCNN(nn.Module):
+    def __init__(self, input_channels: int = 1, n_classes: int = 5):
+        super(Simple1DCNN, self).__init__()
+
+        self.features = nn.Sequential(
+            nn.Conv1d(in_channels=input_channels, out_channels=16, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2),
+
+            nn.Conv1d(in_channels=16, out_channels=32, kernel_size=5, padding=2),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2),
+
+            nn.Conv1d(in_channels=32, out_channels=64, kernel_size=5, padding=2),
+            nn.ReLU(),
+
+            nn.AdaptiveAvgPool1d(output_size=1)
+        )
+
+        self.classifier = nn.Linear(in_features=64, out_features=n_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.to(dtype=self.classifier.weight.dtype, device=self.classifier.weight.device)
+
+        if x.dim() == 2:
+            x = x.unsqueeze(1)
+
+        x = self.features(x)
+        x = torch.flatten(x, start_dim=1) 
+        return self.classifier(x)
     
 class ModelFactory:
     _model_map = {
@@ -260,6 +291,7 @@ class ModelFactory:
         'convnextv2_large': convnextv2_large,
         'convnextv2_huge': convnextv2_huge,
         'pmat': PMAT,
+        'simple1dcnn': Simple1DCNN,
     }
 
     @staticmethod

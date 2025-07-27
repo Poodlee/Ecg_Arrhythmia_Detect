@@ -19,7 +19,7 @@ def main(config):
     set_random_seeds()
     data_loader = DataLoaderFactory.get_dataloader(config['data_loader']['type'], **config['data_loader']['args'])
     valid_data_loader = data_loader.split_validation()
-    model = ModelFactory.get_model((config['arch']['type']))
+    model = ModelFactory.get_model((config['arch']['type']),**config['data_loader']['setting'])
 
     device = config['gpu']
     model = model.to(device)
@@ -51,7 +51,8 @@ def main(config):
         data_loader=data_loader,
         valid_data_loader=valid_data_loader,
         lr_scheduler=lr_scheduler,
-        time = datetime.now().strftime('%Y%m%d-%H%M%S')
+        time = datetime.now().strftime('%Y%m%d-%H%M%S'),
+        n_classes = config['data_loader']['setting'].get('num_classes', 3),
     )
     trainer.train()
 

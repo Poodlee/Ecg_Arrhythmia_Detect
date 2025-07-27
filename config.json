@@ -3,21 +3,35 @@
     "gpu": "cuda:0",
     "resume": null,
     "arch": {
-        "type": "pmat",
+        "type": "simple1dcnn",
         "args": {}
     },
     "data_loader": {
-        "type": "incart",
+        "type": "mit_bih",
+        "setting": {
+            "input_channels": 1,
+            "n_classes": 3
+        },
         "args":{
             "split": "train",
-            "data_dir": "data/incart/files",
+            "data_dir": "data/mit_bih",
             "batch_size": 512,
             "shuffle": true,
-            "preprocess": "median",
-            "xy_method": "pmat",
+            "xy_method": "simple",
             "validation_split": 0.1,
-            "num_workers": 2
-        }
+            "num_workers": 2,
+            "preprocess": {"_resample_rate": 250,
+                            "denoise": {
+                                "bpf": [0.5, 40],
+                                "median": [200, 600],
+                                "median_mode": "double"  
+                            },
+                            "_normalize": "minmax",
+                            "_augmentation": {
+                                "noise": 0.01
+                            }
+                          }
+                        }
     },
     "optimizer": {
         "type": "Adam",
@@ -45,7 +59,7 @@
         }
     },
     "trainer": {
-        "epochs": 20,
+        "epochs": 50,
 
         "save_dir": "saved/",
         "save_period": 1,

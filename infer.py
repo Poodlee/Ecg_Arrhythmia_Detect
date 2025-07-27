@@ -29,7 +29,7 @@ def set_random_seeds(seed=7):
 def main(config):
     set_random_seeds()
     data_loader = DataLoaderFactory.get_dataloader(config['data_loader']['type'], **config['data_loader']['args'])
-    model = ModelFactory.get_model((config['arch']['type']))
+    model = ModelFactory.get_model((config['arch']['type']),**config['data_loader']['setting'])
         
     loss_config = config['loss']
     criterion = LossFactory(
@@ -59,24 +59,43 @@ def main(config):
 
     all_preds, all_targets, all_probs = [], [], []
   
-    n_classes = 3
+    n_classes = config['data_loader']['setting'].get('num_classes', 3)
+    model_name = config['arch']['type']
+    
     with torch.no_grad():
-        for i, (x1, x2, target) in enumerate(tqdm(data_loader)):
-            x1, x2, target = x1.to(device), x2.to(device), target.to(device)
-            preds = model(x1, x2)
-            
-            # Save for confusion matrix
-            all_probs.append(torch.softmax(preds, dim=1).cpu().numpy())
-            all_preds.extend(torch.argmax(preds, dim=1).cpu().numpy())
-            all_targets.extend(target.cpu().numpy())
-            
-            # computing loss, metrics on test set
-            loss = loss_fn(preds, target)
-            batch_size = config['data_loader']['args']['batch_size']
-            total_loss += loss.item() * batch_size
-            for i, metric in enumerate(metrics):
-                total_metrics[i] += metric(preds, target, n_classes) * batch_size
-
+        if model_name == "pmat":
+            for i, (x1, x2, target) in enumerate(tqdm(data_loader)):
+                x1, x2, target = x1.to(device), x2.to(device), target.to(device)
+                preds = model(x1, x2)
+                
+                # Save for confusion matrix
+                all_probs.append(torch.softmax(preds, dim=1).cpu().numpy())
+                all_preds.extend(torch.argmax(preds, dim=1).cpu().numpy())
+                all_targets.extend(target.cpu().numpy())
+                
+                # computing loss, metrics on test set
+                loss = loss_fn(preds, target)
+                batch_size = config['data_loader']['args']['batch_size']
+                total_loss += loss.item() * batch_size
+                for i, metric in enumerate(metrics):
+                    total_metrics[i] += metric(preds, target, n_classes) * batch_size
+        elif model_name == "simple1dcnn":
+            for i, (x, target) in enumerate(tqdm(data_loader)):
+                x, target = x.to(device), target.to(device)
+                preds = model(x)
+                
+                # Save for confusion matrix
+                all_probs.append(torch.softmax(preds, dim=1).cpu().numpy())
+                all_preds.extend(torch.argmax(preds, dim=1).cpu().numpy())
+                all_targets.extend(target.cpu().numpy())
+                
+                # computing loss, metrics on test set
+                loss = loss_fn(preds, target)
+                batch_size = config['data_loader']['args']['batch_size']
+                total_loss += loss.item() * batch_size
+                for i, metric in enumerate(metrics):
+                    total_metrics[i] += metric(preds, target, n_classes) * batch_size
+                    
     n_samples = len(data_loader.sampler)
     log = {'loss': total_loss / n_samples}
     log.update({
@@ -168,76 +187,78 @@ def main(config):
 
     sample_idx = 0
     
-    x1, x2, _ = next(iter(data_loader))
-    x1, x2 = x1.to(device), x2.to(device)
-        
+    x, _ = next(iter(data_loader))
+    x = x.to(device)
+            
     target_layer = model.conv3 if hasattr(model, 'conv3') else list(model.children())[-1]
-    
-    class WrappedModel(torch.nn.Module):
-        def __init__(self, original_model, x2):
-            super().__init__()
-            self.original_model = original_model
-            self.x2 = x2
+
+    if model_name == "pmat":    
+        class WrappedModel(torch.nn.Module):
+            def __init__(self, original_model, x2):
+                super().__init__()
+                self.original_model = original_model
+                self.x2 = x2
+            
+            def forward(self, x1):
+                return self.original_model(x1, self.x2)
         
-        def forward(self, x1):
-            return self.original_model(x1, self.x2)
-    
-    wrapped_model = WrappedModel(model, x2)
+        wrapped_model = WrappedModel(model, x2)
 
-    cam = GradCAM(model=wrapped_model, target_layers=[target_layer])
+        cam = GradCAM(model=wrapped_model, target_layers=[target_layer])
 
-    model.eval()
-    with torch.no_grad():
-        outputs = model(x1, x2)
-        preds = torch.argmax(outputs, dim=1)
+        model.eval()
+        with torch.no_grad():
+            outputs = model(x1, x2)
+            preds = torch.argmax(outputs, dim=1)
     
-    targets = [ClassifierOutputTarget(preds[sample_idx].item())]
+    
+        targets = [ClassifierOutputTarget(preds[sample_idx].item())]
 
-    # Generate CAM
-    grayscale_cam = cam(
-        input_tensor=x1,
-        targets=targets,
-        aug_smooth=True,
-        eigen_smooth=False
-    )[sample_idx]  # shape: (H, W)
+        # Generate CAM
+        grayscale_cam = cam(
+            input_tensor=x1,
+            targets=targets,
+            aug_smooth=True,
+            eigen_smooth=False
+        )[sample_idx]  # shape: (H, W)
 
-    # Prepare original image
-    rgb_image = x1[sample_idx].cpu().permute(1, 2, 0).numpy()
-    
-    # Normalize image to [0,1] range
-    rgb_image = (rgb_image - rgb_image.min()) / (rgb_image.max() - rgb_image.min() + 1e-8)
-    rgb_image = np.clip(rgb_image, 0, 1)  # Ensure values are in valid range
-    
-    # Overlay CAM on image
-    visualization = show_cam_on_image(
-        rgb_image,
-        grayscale_cam,
-        use_rgb=True,
-        image_weight=0.5  # Balance between image and heatmap
-    )
-    
-    # Create visualization
-    plt.figure(figsize=(10, 5))
-    
-    plt.subplot(1, 2, 1)
-    plt.title("Original Image")
-    plt.imshow(rgb_image)
-    plt.axis("off")
-    
-    plt.subplot(1, 2, 2)
-    plt.title(f"Grad-CAM (Class {preds[sample_idx].item()})")
-    plt.imshow(visualization)
-    plt.axis("off")
+        # Prepare original image
+        rgb_image = x1[sample_idx].cpu().permute(1, 2, 0).numpy()
+        
+        # Normalize image to [0,1] range
+        rgb_image = (rgb_image - rgb_image.min()) / (rgb_image.max() - rgb_image.min() + 1e-8)
+        rgb_image = np.clip(rgb_image, 0, 1)  # Ensure values are in valid range
+        
+        # Overlay CAM on image
+        visualization = show_cam_on_image(
+            rgb_image,
+            grayscale_cam,
+            use_rgb=True,
+            image_weight=0.5  # Balance between image and heatmap
+        )
+        
+        # Create visualization
+        plt.figure(figsize=(10, 5))
+        
+        plt.subplot(1, 2, 1)
+        plt.title("Original Image")
+        plt.imshow(rgb_image)
+        plt.axis("off")
+        
+        plt.subplot(1, 2, 2)
+        plt.title(f"Grad-CAM (Class {preds[sample_idx].item()})")
+        plt.imshow(visualization)
+        plt.axis("off")
 
-    os.makedirs(config['output_dir'], exist_ok=True)
-    output_path = os.path.join(
-        config['output_dir'],
-        f'gradcam_sample_{sample_idx}_{int(torch.cuda.get_device_properties(0).total_memory/1024**2)}MB.png'
-    )
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    plt.close()
-    print(f"Grad-CAM visualization saved to {output_path}")
-  
+        os.makedirs(config['output_dir'], exist_ok=True)
+        output_path = os.path.join(
+            config['output_dir'],
+            f'gradcam_sample_{time}.png'
+        )
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Grad-CAM visualization saved to {output_path}")
+
 
 if __name__ == '__main__':
     args = argparse.ArgumentParser(description='PyTorch Template')

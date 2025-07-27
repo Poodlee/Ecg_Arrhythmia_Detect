@@ -11,7 +11,7 @@ class Trainer(BaseTrainer):
     Trainer class
     """
     def __init__(self, model, criterion, metric_ftns, optimizer, config, device,
-                 data_loader, time, valid_data_loader=None, lr_scheduler=None, len_epoch=None):
+                 data_loader, time, valid_data_loader=None, lr_scheduler=None, len_epoch=None, n_classes=3):
         super().__init__(model, criterion, metric_ftns, optimizer, config, time, config['data_loader']['type'])
         self.config = config
         self.device = device
@@ -32,6 +32,8 @@ class Trainer(BaseTrainer):
         self.train_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
         self.valid_metrics = MetricTracker('val_loss', *[f'val_{m.__name__}' for m in self.metric_ftns], writer=self.writer)
 
+        self.model = model
+        self.n_classes = n_classes
     def _train_epoch(self, epoch):
         """
         Training logic for an epoch
@@ -40,28 +42,47 @@ class Trainer(BaseTrainer):
         :return: A log that contains average loss and metric in this epoch.
         """
         self.model.train()
-
         self.train_metrics.reset()
-        for batch_idx, (x1, x2, target) in enumerate(tqdm(self.data_loader, desc=f"Epoch[Train] {epoch} Batches", dynamic_ncols=True, leave=False)):
-            x1, x2, target = x1.to(self.device), x2.to(self.device), target.to(self.device)
+        model_class_name = self.model.__class__.__name__
+        
+        if model_class_name == "PMAT":
+            # PMAT: 두 개의 입력(x1, x2)을 사용
+            for batch_idx, (x1, x2, target) in enumerate(tqdm(self.data_loader, desc=f"Epoch[Train] {epoch} Batches", dynamic_ncols=True, leave=False)):
+                x1, x2, target = x1.to(self.device), x2.to(self.device), target.to(self.device)
 
-            self.optimizer.zero_grad()
-            output = self.model(x1, x2)
-            
-            loss = self.criterion(output, target)
-            loss.backward()    
-            self.optimizer.step()
+                self.optimizer.zero_grad()
+                output = self.model(x1, x2)
+                loss = self.criterion(output, target)
+                loss.backward()
+                self.optimizer.step()
 
-            self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
-            self.train_metrics.update('loss', loss.item())
+                self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
+                self.train_metrics.update('loss', loss.item())
 
-            num_classes = 3
-            for met in self.metric_ftns:
-                self.train_metrics.update(met.__name__, met(output, target, num_classes))
+                for met in self.metric_ftns:
+                    self.train_metrics.update(met.__name__, met(output, target, self.n_classes))
 
-            if batch_idx == self.len_epoch:
-                break
-            
+                if batch_idx == self.len_epoch:
+                    break
+        else:
+            # 나머지 모델: 단일 입력(x)을 사용
+            for batch_idx, (x, target) in enumerate(tqdm(self.data_loader, desc=f"Epoch[Train] {epoch} Batches", dynamic_ncols=True, leave=False)):
+                x, target = x.to(self.device), target.to(self.device)
+
+                self.optimizer.zero_grad()
+                output = self.model(x)
+                loss = self.criterion(output, target)
+                loss.backward()
+                self.optimizer.step()
+
+                self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
+                self.train_metrics.update('loss', loss.item())
+
+                for met in self.metric_ftns:
+                    self.train_metrics.update(met.__name__, met(output, target, self.n_classes))
+
+                if batch_idx == self.len_epoch:
+                    break
             
         log = self.train_metrics.result()
 
@@ -82,21 +103,37 @@ class Trainer(BaseTrainer):
         """
         self.model.eval()
         self.valid_metrics.reset()
+        model_class_name = self.model.__class__.__name__
+        
         with torch.no_grad():
-            for batch_idx, (x1, x2, target) in enumerate(tqdm(self.valid_data_loader, desc=f"Epoch[Valid] {epoch} Batches", dynamic_ncols=True, leave=False)):
-                x1, x2, target = x1.to(self.device), x2.to(self.device), target.to(self.device)
+            if model_class_name == "PMAT":
+                # PMAT: 두 개의 입력(x1, x2)을 사용
+                for batch_idx, (x1, x2, target) in enumerate(tqdm(self.valid_data_loader, desc=f"Epoch[Valid] {epoch} Batches", dynamic_ncols=True, leave=False)):
+                    x1, x2, target = x1.to(self.device), x2.to(self.device), target.to(self.device)
 
-                self.optimizer.zero_grad()
-                output = self.model(x1, x2)
-                loss = self.criterion(output, target)
+                    output = self.model(x1, x2)
+                    loss = self.criterion(output, target)
 
-                self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
-                self.valid_metrics.update('val_loss', loss.item())
-                num_classes = 3
-                for met in self.metric_ftns:
-                    self.valid_metrics.update(f'val_{met.__name__}', met(output, target, num_classes))
-                self.writer.add_image('input', make_grid(x1.cpu(), nrow=8, normalize=True))
+                    self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
+                    self.valid_metrics.update('val_loss', loss.item())
+                    num_classes = 3
+                    for met in self.metric_ftns:
+                        self.valid_metrics.update(f'val_{met.__name__}', met(output, target, num_classes))
+                    self.writer.add_image('input', make_grid(x1.cpu(), nrow=8, normalize=True))
+            else:
+                # 나머지 모델: 단일 입력(x)을 사용
+                for batch_idx, (x, target) in enumerate(tqdm(self.valid_data_loader, desc=f"Epoch[Valid] {epoch} Batches", dynamic_ncols=True, leave=False)):
+                    x, target = x.to(self.device), target.to(self.device)
 
+                    output = self.model(x)
+                    loss = self.criterion(output, target)
+
+                    self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
+                    self.valid_metrics.update('val_loss', loss.item())
+                    num_classes = 3
+                    for met in self.metric_ftns:
+                        self.valid_metrics.update(f'val_{met.__name__}', met(output, target, num_classes))
+                    self.writer.add_image('input', make_grid(x.cpu(), nrow=8, normalize=True))
         return self.valid_metrics.result()
 
     def _progress(self, batch_idx):

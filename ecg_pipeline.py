@@ -15,105 +15,46 @@ import os
 
 from tqdm import tqdm
 
-# ECG signal pre-processing (denoising, standardization, feature extraction, etc.)
+from scipy.signal import resample
+from scipy.signal import butter, filtfilt, medfilt
+import numpy as np
 
-def bandpass_filter(signal_array, fs, lowcut=0.5, highcut=40, order=4):
-    """
-    Apply Butterworth bandpass filter to ECG signals.
-    
-    Args:
-        signal_array: numpy array of shape (N,) or (N, T)
-        fs: sampling frequency
-        lowcut: low cutoff frequency in Hz
-        highcut: high cutoff frequency in Hz
-        order: filter order
-        
-    Returns:
-        Filtered signal (same shape as input)
-    """
+def bandpass_filter(signal, lowcut=0.5, highcut=40.0, fs=250, order=4):
     nyquist = 0.5 * fs
     low = lowcut / nyquist
     high = highcut / nyquist
-    b, a = signal.butter(order, [low, high], btype='band')
+    b, a = butter(order, [low, high], btype='band')
+    return filtfilt(b, a, signal)
+
+def median_filter(signal, kernel_ms=200, fs=250):
+    kernel_size = int(kernel_ms * fs / 1000)
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+    return medfilt(signal, kernel_size)
+
+def resample_signal(signal, original_fs=360, target_fs=250):
+    duration = len(signal) / original_fs
+    target_length = int(duration * target_fs)
+    return resample(signal, target_length)
     
-    if signal_array.ndim == 1:
-        return signal.filtfilt(b, a, signal_array)
-    else:
-        return np.array([signal.filtfilt(b, a, sig) for sig in signal_array])
+def min_max_normalize(signal):
+    min_val = np.min(signal)
+    max_val = np.max(signal)
+    return (signal - min_val) / (max_val - min_val + 1e-8)
 
+def z_score_normalize(signal):
+    mean = np.mean(signal)
+    std = np.std(signal)
+    return (signal - mean) / (std + 1e-8)
 
-def detrend_signal(signal_array):
-    """
-    Remove linear trend from signal.
-    
-    Returns:
-        Detrended signal
-    """
-    if signal_array.ndim == 1:
-        return signal.detrend(signal_array)
-    else:
-        return signal.detrend(signal_array, axis=-1)
-
-
-def standardize_signal(signal_array):
-    """
-    Apply Min-Max normalization to ECG signals.
-    
-    Returns:
-        Standardized signal
-    """
-
-    def min_max(sig):
-        min_val = np.min(sig)
-        max_val = np.max(sig)
-
-        if max_val - min_val == 0:
-            return np.zeros_like(sig)
-        return (sig - min_val) / (max_val - min_val)
-    
-    if signal_array.ndim == 1:
-        return min_max(signal_array)
-    else:
-        return np.array([min_max(sig) for sig in signal_array])
-    
-def stockwell_transform(signal, fs, fmin=0, fmax=None):
-    from stockwell import st
-    """
-    Apply Stockwell Transform (S-transform) to a 1D signal.
-
-    Args:
-        signal (np.ndarray): 1D array of the signal
-        fs (float): Sampling frequency in Hz
-        fmin (float): Minimum frequency (Hz) for transform
-        fmax (float or None): Maximum frequency (Hz) for transform.
-                              If None, defaults to fs/2.
-
-    Returns:
-        st_result (np.ndarray): 2D array of complex S-transform (freq x time)
-        freqs (np.ndarray): Frequency axis values
-        times (np.ndarray): Time axis values
-    """
-    N = len(signal)
-    duration = N / fs
-    t = np.linspace(0, duration, N)
-
-    df = 1.0 / duration
-    if fmax is None:
-        fmax = fs / 2
-
-    fmin_samples = int(fmin / df)
-    fmax_samples = int(fmax / df)
-
-    # Apply Stockwell Transform
-    st_result = st.st(signal, fmin_samples, fmax_samples)
-
-    freqs = np.linspace(fmin, fmax, fmax_samples - fmin_samples)
-    return st_result, freqs, t
-    
 def moving_average(signal, window):
     weights = np.repeat(1.0, window) / window            
     ma = np.convolve(signal, weights, 'valid')
     return ma
+
+def add_gaussian_noise(signal, noise_level=0.01):
+    noise = np.random.normal(0, noise_level, size=signal.shape)
+    return signal + noise
 
 def pmat(signal, max_window, direction):
     N = len(signal)
@@ -152,24 +93,52 @@ def prepare_scaled_records(records, database, sampling_rate, path_str, preproces
         anns = wfdb.rdann(f'{path_str}/{record}', extension='atr')
         r_peaks, annotations = anns.sample, anns.symbol                                        
         
-        if preprocess == 'median':
-            baseline = sg.medfilt(sg.medfilt(ecg, int(0.2 * sampling_rate) - 1), int(0.6 * sampling_rate) - 1)    
-            filtered_signal = ecg - baseline
-            scaled_signal = filtered_signal 
+                # === Apply Preprocessing ===
+        if isinstance(preprocess, dict):  # new flexible config format
+            fs = sampling_rate
+
+            if preprocess.get("resample_rate") and preprocess["resample_rate"] != fs:
+                ecg = resample_signal(ecg, sampling_rate, preprocess["resample_rate"])
+                fs = preprocess["resample_rate"]
+                print(f'Resampled ECG from {sampling_rate}Hz to {fs}Hz')
+            else:
+                fs = sampling_rate
+
+            if preprocess.get("denoise", {}).get("bpf"):
+                lowcut, highcut = preprocess["denoise"]["bpf"]
+                ecg = bandpass_filter(ecg, lowcut=lowcut, highcut=highcut, fs=fs)
+                print(f'Applied bandpass filter: {lowcut}-{highcut}Hz')
+                
+            if preprocess.get("denoise", {}).get("median"):
+                for k in preprocess["denoise"]["median"]:
+                    ecg = median_filter(ecg, kernel_ms=k, fs=fs)
+                print(f'Applied median filter with kernel size(s): {preprocess["denoise"]["median"]}ms')
+
+            if preprocess.get("normalize") == "zscore":
+                ecg = z_score_normalize(ecg)
+                print('Applied Z-score normalization')
+            elif preprocess.get("normalize"):
+                ecg = min_max_normalize(ecg)
+                print('Applied Min-Max normalization')
+
+            if preprocess.get("augmentation", {}).get("noise"):
+                ecg = add_gaussian_noise(ecg, noise_level=preprocess["augmentation"]["noise"])
+                print(f'Added Gaussian noise with level: {preprocess["augmentation"]["noise"]}')
         else:
-            scaled_signal = ecg
+            raise ValueError("Unsupported preprocess format. Please use a dictionary with appropriate keys.")
         
-          
-        scaled_signals.append(scaled_signal)
+        scaled_signals.append(ecg)
         
         # align r-peaks
         newR = []
         for r_peak in r_peaks:
-            r_left = np.maximum(r_peak - int(tol * sampling_rate), 0)
-            r_right = np.minimum(r_peak + int(tol * sampling_rate), len(scaled_signal))
-            newR.append(r_left + np.argmax(scaled_signal[r_left:r_right]))
+            r_left = np.maximum(r_peak - int(tol * fs), 0)
+            r_right = np.minimum(r_peak + int(tol * fs), len(ecg))  # len(ecg)로 수정
+            segment = ecg[r_left:r_right]  # 현재 ECG 신호에서 슬라이스
+            if len(segment) == 0:
+                continue  # 혹은 예외 처리
+            newR.append(r_left + np.argmax(segment))
         r_peaks = np.array(newR, dtype="int")
-        
         r_peak_list.append(r_peaks)        
         ann_list.append(annotations) 
     return scaled_signals, r_peak_list, ann_list
@@ -219,8 +188,13 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
     
     if xy_method == 'pmat':
         x1, x2, y = pmat_xy(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train, before, after)
-    
-    return x1, x2, y
+        return x1, x2, y
+    elif xy_method == 'simple':
+        x, y = simple_cnn_xy(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train, before, after)
+        return x, y
+
+    else:
+        raise ValueError(f"[getXY] Unsupported xy_method: {xy_method}")
     
 def pmat_xy(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train, before, after):
     wavelet = "gaus4"  # mexh, morl, gaus8, gaus4
@@ -367,3 +341,26 @@ def pmat_xy(scaled_signals, r_peak_list, ann_list, database, sampling_rate, trai
             count +=1
 
     return x1, x2, y
+
+def simple_cnn_xy(signals, r_peaks_list, ann_list, database, fs, train, before, after):
+    X = []
+    Y = []
+    
+    for ecg, r_peaks, annotations in zip(signals, r_peaks_list, ann_list):
+        for r, ann in zip(r_peaks, annotations):
+            if ann in PhysioBank:
+                start = r - before
+                end = r + after
+                if start < 0 or end > len(ecg):
+                    continue
+                segment = ecg[start:end]
+                label = PhysioBank[ann]
+                if label == 3:
+                    continue
+                X.append(segment)
+                Y.append(PhysioBank[ann])
+
+    X = np.array(X)
+    Y = np.array(Y)
+
+    return X, Y

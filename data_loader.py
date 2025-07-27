@@ -8,7 +8,6 @@ import cv2
 from scipy.signal import butter, filtfilt
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-from ecg_pipeline import bandpass_filter, stockwell_transform, standardize_signal
 from PIL import Image
 from ecg_pipeline import prepare_scaled_records, getXY
 
@@ -77,27 +76,43 @@ class Mit_bihDataset(Dataset):
 
         # 데이터 전처리
         scaled_signals, r_peak_list, ann_list = prepare_scaled_records(
-            self.records, database='mit_bih', sampling_rate=self.fs, path_str=self.data_path, preprocess=process
+            self.records, database='mit_bih', sampling_rate=self.fs, path_str=self.data_path, preprocess=preprocess
         )
         before, after = 90, 100 # MIT
 
-        # 특징 추출 및 데이터 준비
-        self.x1, self.x2, self.y = getXY(
-            scaled_signals, r_peak_list, ann_list, database='mit_bih', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after, xy_method=xy_method
-        )
-
+        self.xy_method = xy_method
+        if xy_method == 'pmat':
+            # 특징 추출 및 데이터 준비
+            self.x1, self.x2, self.y = getXY(
+                scaled_signals, r_peak_list, ann_list, database='mit_bih', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after, xy_method=xy_method
+            )
+        elif xy_method == 'simple':
+            self.x, self.y = getXY(
+                scaled_signals, r_peak_list, ann_list, database='mit_bih', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after, xy_method=xy_method
+            )
+            
     def __len__(self):
         return len(self.y)
     
     def __getitem__(self, idx):
-        x1 = self.x1[idx]        
-        x2 = self.x2[idx]
         y = self.y[idx]
+
+        if self.xy_method == 'pmat':
+            x1 = self.x1[idx]        
+            x2 = self.x2[idx]
+            
+            if self.transform:
+                x1 = self.transform(x1)
+            
+            return x1, x2, y
         
-        if self.transform:
-            x1 = self.transform(x1)
-        
-        return x1, x2, y
+        elif self.xy_method == 'simple':
+            x = self.x[idx]
+            
+            if self.transform:
+                x = self.transform(x)
+            
+            return x, y
 
 class IncartDataLoader(BaseDataLoader):
     def __init__(self, data_dir, preprocess, xy_method, batch_size=32, shuffle=True, split= 'train', validation_split=0.1, num_workers=8, fs=360):
