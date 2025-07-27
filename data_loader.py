@@ -75,47 +75,15 @@ class Mit_bihDataset(Dataset):
         # split에 따라 레코드 선택
         self.records = records_mit_train if split == 'train' else records_mit_test
         
-        # 처리된 데이터 저장 경로
-        self.processed_dir = os.path.join(data_path, 'processed', split)
-                
-        # 데이터가 이미 존재하는지 확인
-        self.data_file = os.path.join(self.processed_dir, f"{split}_infos.pt")
-        
-        if os.path.exists(self.data_file):
-            
-            split_infos = torch.load(self.data_file, weights_only=False)
-            self.x1 = split_infos['x1']
-            
-            x2_np = np.array(split_infos['x2']).astype(np.float64)
-            
-            # StandardScaler 적용
-            mean = x2_np.mean(axis=0)
-            std = x2_np.std(axis=0)
-            std[std == 0] = 1.0  
-            x2_scaled = (x2_np - mean) / std
-            self.x2 = torch.tensor(x2_scaled, dtype=torch.float32)
-            self.y = torch.LongTensor(split_infos['y'])
-            
-        else:
-            os.makedirs(self.processed_dir, exist_ok=True)
+        # 데이터 전처리
+        scaled_signals, r_peak_list, ann_list = prepare_scaled_records(
+            self.records, database='mit_bih', sampling_rate=self.fs, path_str=self.data_path
+        )
+        before, after = 90, 100 # MIT
+        self.x1, self.x2, self.y = getXY(
+                scaled_signals, r_peak_list, ann_list, database='mit_bih', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after, xy_method=xy_method
+        )
 
-            # 데이터 전처리
-            scaled_signals, r_peak_list, ann_list = prepare_scaled_records(
-                self.records, database='mit_bih', sampling_rate=self.fs, path_str=self.data_path
-            )
-            before, after = 90, 100 # MIT
-
-            # 특징 추출 및 데이터 준비
-            self.x1, self.x2, self.y = getXY(
-                scaled_signals, r_peak_list, ann_list, database='mit_bih', sampling_rate=self.fs, train=(split == 'train'), before=before, after=after
-            )
-            # 데이터 저장
-            torch.save({
-                'x1': self.x1,
-                'x2': self.x2,
-                'y': self.y
-            }, self.data_file)
-    
 
         
     def __len__(self):

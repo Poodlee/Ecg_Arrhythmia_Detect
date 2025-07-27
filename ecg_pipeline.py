@@ -314,8 +314,6 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
             #shapirotest = shapiro(heartbeat)                       
             
             subset = 'train' if train else 'test'
-            os.makedirs(f'.\\data\\{database}\\pmat\\{subset}', exist_ok=True)                        
-            path_current = f'.\\data\\{database}\\pmat\\{subset}\\x1_{i}_{r}.pt' 
             
             # Scale the heartbeat            
             heartbeat = (heartbeat-heartbeat.min())/(heartbeat.max()-heartbeat.min())                                    
@@ -336,16 +334,6 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
             m_next = cv2.resize(m_next, (120, 120))                                    
             
             m = torch.tensor(np.array([m_prev, m_current, m_next])).reshape([3,120, 120]).float()
-            torch.save(m, path_current)
-            
-            # OR Take only the current heartbeat
-            '''
-            m_current = pmat(heartbeat, max_window=100, direction='Left')
-           
-            m_current = cv2.resize(m_current, (120, 120))
-            m = torch.tensor(np.array([m_current])).reshape([1,120, 120]).float()
-            torch.save(m, path_current)  
-            '''
             
             a = np.maximum(k - 18, 0)
             b = np.maximum(a + 18, k + 1)
@@ -358,7 +346,7 @@ def getXY(scaled_signals, r_peak_list, ann_list, database, sampling_rate, train,
                 avg_rri_local / avg_rri,  # local RR Interval
             ])            
             
-            x1.append(path_current)
+            x1.append(m)
             x2.append(input_2)
             y.append(label)
             count +=1
