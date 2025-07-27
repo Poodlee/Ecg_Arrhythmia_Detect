@@ -60,9 +60,9 @@ def main(config):
   
     n_classes = 3
     with torch.no_grad():
-        for i, (data, target) in enumerate(tqdm(data_loader)):
-            data, target = {k: v.to(device) for k,v in data.items()}, target.to(device)
-            preds = model(**data)
+        for i, (x1, x2, target) in enumerate(tqdm(data_loader)):
+            x1, x2, target = x1.to(device), x2.to(device), target.to(device)
+            preds = model(x1, x2)
             
             # Save for confusion matrix
             all_probs.append(torch.softmax(preds, dim=1).cpu().numpy())

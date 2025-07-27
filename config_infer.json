@@ -2,17 +2,17 @@
     "name": "Test Setting",
     "n_gpu": 1,
     "gpu": "cuda:0",
-    "resume": "saved/20250708-150321/mit_bih_model_best.pth",
+    "resume": "saved/mit_bih/20250727-222204_basic/model_best(epoch14).pth",
     "output_dir": "outputs/",
     "arch": {
         "type": "pmat",
         "args": {}
     },
     "data_loader": {
-        "type": "mit_bih",
+        "type": "incart",
         "args":{
             "split": "test",
-            "data_dir": "data/mit_bih",
+            "data_dir": "data/incart",
             "batch_size": 512,
             "shuffle": "False",
             "validation_split": 0.0,

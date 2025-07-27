@@ -14,100 +14,21 @@ import torch
 import os
 from tqdm import tqdm
 # ECG signal pre-processing (denoising, standardization, feature extraction, etc.)
+from scipy.signal import butter, filtfilt, iirnotch
 
-def bandpass_filter(signal_array, fs, lowcut=0.5, highcut=40, order=4):
-    """
-    Apply Butterworth bandpass filter to ECG signals.
-    
-    Args:
-        signal_array: numpy array of shape (N,) or (N, T)
-        fs: sampling frequency
-        lowcut: low cutoff frequency in Hz
-        highcut: high cutoff frequency in Hz
-        order: filter order
-        
-    Returns:
-        Filtered signal (same shape as input)
-    """
-    nyquist = 0.5 * fs
-    low = lowcut / nyquist
-    high = highcut / nyquist
-    b, a = signal.butter(order, [low, high], btype='band')
-    
-    if signal_array.ndim == 1:
-        return signal.filtfilt(b, a, signal_array)
-    else:
-        return np.array([signal.filtfilt(b, a, sig) for sig in signal_array])
+# High-pass filter
+def highpass_filter(signal, fs, cutoff=0.5, order=2):
+    b, a = butter(order, cutoff / (0.5 * fs), btype='high')
+    return filtfilt(b, a, signal)
 
+# Notch filter (60Hz)
+def notch_filter(signal, fs, freq=60.0, Q=30):
+    b, a = iirnotch(freq / (fs / 2), Q)
+    return filtfilt(b, a, signal)
 
-def detrend_signal(signal_array):
-    """
-    Remove linear trend from signal.
-    
-    Returns:
-        Detrended signal
-    """
-    if signal_array.ndim == 1:
-        return signal.detrend(signal_array)
-    else:
-        return signal.detrend(signal_array, axis=-1)
-
-
-def standardize_signal(signal_array):
-    """
-    Apply Min-Max normalization to ECG signals.
-    
-    Returns:
-        Standardized signal
-    """
-
-    def min_max(sig):
-        min_val = np.min(sig)
-        max_val = np.max(sig)
-
-        if max_val - min_val == 0:
-            return np.zeros_like(sig)
-        return (sig - min_val) / (max_val - min_val)
-    
-    if signal_array.ndim == 1:
-        return min_max(signal_array)
-    else:
-        return np.array([min_max(sig) for sig in signal_array])
-    
-def stockwell_transform(signal, fs, fmin=0, fmax=None):
-    from stockwell import st
-    """
-    Apply Stockwell Transform (S-transform) to a 1D signal.
-
-    Args:
-        signal (np.ndarray): 1D array of the signal
-        fs (float): Sampling frequency in Hz
-        fmin (float): Minimum frequency (Hz) for transform
-        fmax (float or None): Maximum frequency (Hz) for transform.
-                              If None, defaults to fs/2.
-
-    Returns:
-        st_result (np.ndarray): 2D array of complex S-transform (freq x time)
-        freqs (np.ndarray): Frequency axis values
-        times (np.ndarray): Time axis values
-    """
-    N = len(signal)
-    duration = N / fs
-    t = np.linspace(0, duration, N)
-
-    df = 1.0 / duration
-    if fmax is None:
-        fmax = fs / 2
-
-    fmin_samples = int(fmin / df)
-    fmax_samples = int(fmax / df)
-
-    # Apply Stockwell Transform
-    st_result = st.st(signal, fmin_samples, fmax_samples)
-
-    freqs = np.linspace(fmin, fmax, fmax_samples - fmin_samples)
-    return st_result, freqs, t
-    
+# Z-score normalization
+def zscore(x):
+    return (x - np.mean(x)) / (np.std(x) + 1e-8)    
 def moving_average(signal, window):
     weights = np.repeat(1.0, window) / window            
     ma = np.convolve(signal, weights, 'valid')
@@ -150,9 +71,15 @@ def prepare_scaled_records(records, database, sampling_rate, path_str):
         anns = wfdb.rdann(f'{path_str}/{record}', extension='atr')
         r_peaks, annotations = anns.sample, anns.symbol                                        
         
+        
+        # ecg = notch_filter(ecg, sampling_rate)
+        # ecg = highpass_filter(ecg, sampling_rate)
+
         baseline = sg.medfilt(sg.medfilt(ecg, int(0.2 * sampling_rate) - 1), int(0.6 * sampling_rate) - 1)
         
         filtered_signal = ecg - baseline
+                
+        # filtered_signal = zscore(filtered_signal)
                 
         scaled_signal = filtered_signal   
         scaled_signals.append(scaled_signal)
