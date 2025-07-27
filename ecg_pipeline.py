@@ -93,7 +93,7 @@ def prepare_scaled_records(records, database, sampling_rate, path_str, preproces
         anns = wfdb.rdann(f'{path_str}/{record}', extension='atr')
         r_peaks, annotations = anns.sample, anns.symbol                                        
         
-                # === Apply Preprocessing ===
+        # === Apply Preprocessing ===
         if isinstance(preprocess, dict):  # new flexible config format
             fs = sampling_rate
 
@@ -342,25 +342,50 @@ def pmat_xy(scaled_signals, r_peak_list, ann_list, database, sampling_rate, trai
 
     return x1, x2, y
 
+def ecg_to_cwt_image(signal, fs=250, wavelet='morl', scale_range=(1, 128), output_size=(128, 128)):
+    scales = np.arange(scale_range[0], scale_range[1] + 1)
+    coef, _ = pywt.cwt(signal, scales, wavelet, sampling_period=1.0/fs)
+    
+    # 정규화 및 이미지 변환
+    cwt_image = np.abs(coef)
+    cwt_image = (cwt_image - cwt_image.min()) / (cwt_image.max() - cwt_image.min() + 1e-8)
+
+    # Resize to fixed output size (optional)
+    cwt_image = cv2.resize(cwt_image, output_size)
+
+    return cwt_image  # shape: [H, W]
+
+
 def simple_cnn_xy(signals, r_peaks_list, ann_list, database, fs, train, before, after):
     X = []
     Y = []
-    
+
     for ecg, r_peaks, annotations in zip(signals, r_peaks_list, ann_list):
-        for r, ann in zip(r_peaks, annotations):
-            if ann in PhysioBank:
-                start = r - before
-                end = r + after
-                if start < 0 or end > len(ecg):
-                    continue
-                segment = ecg[start:end]
-                label = PhysioBank[ann]
-                if label == 3:
-                    continue
-                X.append(segment)
-                Y.append(PhysioBank[ann])
+        for i in range(1, len(r_peaks) - 1):
+            r = r_peaks[i]
+            ann = annotations[i]
 
-    X = np.array(X)
+            if ann not in PhysioBank or ann in invalid_anns:
+                continue
+
+            label = PhysioBank[ann]
+            if label == 3:
+                continue
+
+            start = r - before
+            end = r + after
+            if start < 0 or end > len(ecg):
+                continue
+
+            segment = ecg[start:end]
+            segment = (segment - np.min(segment)) / (np.max(segment) - np.min(segment) + 1e-8)
+
+            # 💡 Wavelet transform to 2D image
+            cwt_img = ecg_to_cwt_image(segment, fs=fs, wavelet='morl', output_size=(128, 128))
+
+            X.append(cwt_img)
+            Y.append(label)
+
+    X = np.array(X)  # shape: [N, H, W]
     Y = np.array(Y)
-
     return X, Y

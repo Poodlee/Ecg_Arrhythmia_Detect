@@ -71,6 +71,7 @@ class Trainer(BaseTrainer):
 
                 self.optimizer.zero_grad()
                 output = self.model(x)
+                target = target.long()
                 loss = self.criterion(output, target)
                 loss.backward()
                 self.optimizer.step()
@@ -126,6 +127,7 @@ class Trainer(BaseTrainer):
                     x, target = x.to(self.device), target.to(self.device)
 
                     output = self.model(x)
+                    target = target.long()
                     loss = self.criterion(output, target)
 
                     self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
@@ -133,7 +135,7 @@ class Trainer(BaseTrainer):
                     num_classes = 3
                     for met in self.metric_ftns:
                         self.valid_metrics.update(f'val_{met.__name__}', met(output, target, num_classes))
-                    self.writer.add_image('input', make_grid(x.cpu(), nrow=8, normalize=True))
+                    # self.writer.add_image('input', make_grid(x.cpu(), nrow=8, normalize=True))
         return self.valid_metrics.result()
 
     def _progress(self, batch_idx):

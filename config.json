@@ -3,7 +3,7 @@
     "gpu": "cuda:0",
     "resume": null,
     "arch": {
-        "type": "simple1dcnn",
+        "type": "pmat",
         "args": {}
     },
     "data_loader": {
@@ -17,16 +17,16 @@
             "data_dir": "data/mit_bih",
             "batch_size": 512,
             "shuffle": true,
-            "xy_method": "simple",
+            "xy_method": "pmat",
             "validation_split": 0.1,
             "num_workers": 2,
-            "preprocess": {"_resample_rate": 250,
+            "preprocess": {"resample_rate": 250,
                             "denoise": {
                                 "bpf": [0.5, 40],
                                 "median": [200, 600],
                                 "median_mode": "double"  
                             },
-                            "_normalize": "minmax",
+                            "normalize": "minmax",
                             "_augmentation": {
                                 "noise": 0.01
                             }

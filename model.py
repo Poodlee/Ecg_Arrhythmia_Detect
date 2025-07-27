@@ -205,7 +205,7 @@ def convnextv2_huge(**kwargs):
     return model
     
 class PMAT(BaseModel):
-    def __init__(self, L=4):
+    def __init__(self, input_channels, n_classes, L=4):
         super(PMAT, self).__init__()        
         self.conv1 = nn.Conv2d(3, 32, (5, 5))
         self.conv2 = nn.Conv2d(32, 64, (5, 5))
@@ -270,13 +270,39 @@ class Simple1DCNN(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.to(dtype=self.classifier.weight.dtype, device=self.classifier.weight.device)
-
-        if x.dim() == 2:
-            x = x.unsqueeze(1)
-
+        x = x.unsqueeze(1)
         x = self.features(x)
         x = torch.flatten(x, start_dim=1) 
         return self.classifier(x)
+    
+class Simple2DCNN(nn.Module):
+    def __init__(self, input_channels: int = 1, n_classes: int = 5):
+        super(Simple2DCNN, self).__init__()
+
+        self.features = nn.Sequential(
+            nn.Conv2d(in_channels=input_channels, out_channels=16, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+
+            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=5, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=5, padding=2),
+            nn.ReLU(),
+
+            nn.AdaptiveAvgPool2d(output_size=1)
+        )
+
+        self.classifier = nn.Linear(in_features=64, out_features=n_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.to(dtype=self.classifier.weight.dtype, device=self.classifier.weight.device)
+        x = x.unsqueeze(1)
+        x = self.features(x)
+        x = torch.flatten(x, start_dim=1) 
+        return self.classifier(x)
+
     
 class ModelFactory:
     _model_map = {
@@ -292,6 +318,7 @@ class ModelFactory:
         'convnextv2_huge': convnextv2_huge,
         'pmat': PMAT,
         'simple1dcnn': Simple1DCNN,
+        'simple2dcnn': Simple2DCNN
     }
 
     @staticmethod
